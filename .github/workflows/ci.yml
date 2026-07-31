@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - name: Unit tests
+        run: go test ./pkg/featcache/ -v -count=1 -race
+      - name: Coverage report
+        run: |
+          go test ./pkg/featcache/ -coverprofile=coverage.out -covermode=atomic -count=1
+          go tool cover -func=coverage.out
+
+  bench:
+    name: Benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - name: Run benchmarks
+        run: go test ./pkg/featcache/ -bench=. -benchmem -count=1 -timeout=10m
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux]
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - name: Build featload
+        run: GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o featload-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/featload
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: featload-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: featload-${{ matrix.goos }}-${{ matrix.goarch }}
