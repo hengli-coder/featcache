@@ -1,104 +1,130 @@
 // Package featcache implements a zero-copy runtime data cache for AI inference.
 //
-// Architecture: single-writer + multiple-reader pattern.
-// The server owns the shared memory segment (via mmap of /dev/shm file),
-// manages writes (SET/UPDATE/DELETE), and serves metadata lookups over
-// Unix Domain Socket. Clients map the same shared memory and read data
-// directly — zero-copy, no kernel involvement on the read path.
+// Architecture: single-writer (Loader) + multiple-reader (inference processes).
+// The Loader owns the shared memory segment, writes data, and serves metadata
+// lookups over Unix Domain Socket. Clients mmap the same segment and read data
+// directly — zero-copy, no locks, no syscalls on the read path.
 package featcache
 
-import "time"
+// --- Segment layout constants ---
 
 const (
-	// Magic is the first 4 bytes of the shared memory header.
-	Magic = 0x53484D47 // "SHMG" little-endian
+	// Magic is the first 4 bytes of the segment header: "FEAT" little-endian.
+	Magic = 0x46454154
 
-	// Version of the shared memory layout.
+	// Version is the current layout version.
 	Version = 1
 
-	// SegmentDefaultSize is the default shared memory size (2 GB).
+	// HeaderSize is the size of the segment header (one cache line).
+	HeaderSize = 64
+
+	// SlotSize is the size of each hash table slot (24 bytes).
+	// Layout: [hash:8B][offset:4B][vlen:4B][status:4B][pad:4B]
+	SlotSize = 24
+
+	// SegmentDefaultSize is the default segment size (2 GB).
 	SegmentDefaultSize = 2 << 30
-
-	// CacheLineSize is the CPU cache line alignment.
-	CacheLineSize = 64
-
-	// Slab classes — chunk sizes in bytes.
-	SlabMinClass = 6  // 2^6 = 64 B
-	SlabMaxClass = 15 // 2^15 = 32 KB
-	NumSlabClasses = SlabMaxClass - SlabMinClass + 1 // 10 classes
-
-	// HeaderSize is the size of the shared memory header (one cache line).
-	HeaderSize = CacheLineSize
-
-	// SlotSize is the size of each hash table slot.
-	SlotSize = 16
 
 	// MaxKeyLen is the maximum key length in bytes.
 	MaxKeyLen = 256
-
-	// MinSlabReserve is the minimum slab metadata per class.
-	MinSlabReserve = 64
-
-	// MaxChunksPerClass limits how many chunks each slab class can have.
-	MaxChunksPerClass = 65536
 )
 
-// Segment header layout (offset 0, exactly 64 bytes).
+// --- Header: the first 64 bytes of a shared memory segment ---
+//
+// All fields are stored in native byte order (little-endian on x86/ARM).
+//
+//	Offset  Size  Field
+//	0       4     Magic
+//	4       4     Version
+//	8       8     Size
+//	16      8     GenCounter
+//	24      4     HashCap (number of slots, power of 2)
+//	28      4     HashOffset (bytes from segment start)
+//	32      4     DataOffset (bytes from segment start)
+//	36      4     DataEnd (next free byte in data region, relative to segment start)
+//	40      4     SegmentID
+//	44      4     Flags (reserved)
+//	48      16    Reserved
 type Header struct {
-	Magic   uint32 // 0x53484D47
-	Version uint32 // layout version
-	Size    uint64 // total shared memory size
-	HashCap uint32 // hash table slot count (power of 2)
-	_       [48]byte // padding to 64B cache line
+	Magic       uint32
+	Version     uint32
+	Size        uint64
+	GenCounter  uint64
+	HashCap     uint32
+	HashOffset  uint32
+	DataOffset  uint32
+	DataEnd     uint32
+	SegmentID   uint32
+	Flags       uint32
+	Reserved    [16]byte
 }
 
-// Slot status constants.
+// --- Slot status constants ---
+
 const (
-	SlotEmpty   = 0
-	SlotUsed    = 1
-	SlotTomb    = 2 // logical deletion tombstone
+	SlotEmpty   uint32 = 0 // Slot has never been written
+	SlotUsed    uint32 = 1 // Slot holds a valid key-value pair
+	SlotTomb    uint32 = 2 // Logical deletion; preserves probe sequence
 )
 
-// HashSlot is a single slot in the open-addressed hash table (16 bytes).
+// --- HashSlot: 24 bytes, stored in the hash table region ---
+//
+//	Offset  Size  Field
+//	0       8     Hash (full 64-bit hash)
+//	8       4     Offset (byte offset into data region, relative to DataOffset)
+//	12      4     VLen (value length in bytes)
+//	16      4     Status (SlotEmpty / SlotUsed / SlotTomb)
+//	20      4     Reserved
 type HashSlot struct {
-	HashHigh uint32 // upper 32 bits of hash — fast pre-filter
-	Status   uint32 // 0=empty, 1=used, 2=tombstone
-	Offset   uint32 // byte offset into data region
-	VLen     uint32 // value length in bytes
+	Hash    uint64 // full 64-bit hash — avoids key comparison on most lookups
+	Offset  uint32 // byte offset into data region (relative to DataOffset)
+	VLen    uint32 // value length in bytes
+	Status  uint32 // SlotEmpty / SlotUsed / SlotTomb
+	_       [4]byte
 }
 
-// SlabClassDesc describes one slab class stored in the metadata region.
-type SlabClassDesc struct {
-	ChunkSize int32 // size of each chunk (power of 2)
-	ChunkCnt  int32 // total chunks in this class
-	FreeHead  int32 // index of first free chunk (-1 = none) — atomic
-	_         [52]byte // padding to 64B
-}
+// --- OpCode for UDS protocol ---
 
-// OpCode for the UDS protocol.
 type OpCode byte
 
 const (
-	OpGet OpCode = iota + 1
-	OpSet
-	OpDel
-	OpStats
+	OpGetInfo    OpCode = 0x01 // Get segment metadata
+	OpGetStatus  OpCode = 0x02 // Get loader status
+	OpWatch      OpCode = 0x03 // Watch for version changes (Phase 2)
+	OpPin        OpCode = 0x04 // Pin data in memory (Phase 3)
+	OpPrefetch   OpCode = 0x05 // Prefetch data to cache (Phase 3)
+	OpEvict      OpCode = 0x06 // Evict cache data (Phase 3)
+	OpList       OpCode = 0x07 // List loaded datasets (Phase 3)
+	OpReload     OpCode = 0x08 // Trigger reload (Phase 3)
 )
 
-// Status code for UDS responses.
+// --- StatusCode for UDS responses ---
+
 type StatusCode byte
 
 const (
-	StatusOK        StatusCode = 0
-	StatusNotFound  StatusCode = 1
-	StatusFull      StatusCode = 2
-	StatusError     StatusCode = 3
+	RespOK       StatusCode = 0x00
+	RespNotFound StatusCode = 0x01
+	RespBusy     StatusCode = 0x02 // Loader is reloading
+	RespError    StatusCode = 0x03
 )
 
-// LogEntry is returned by Stats.
-type LogEntry struct {
-	Key       string
-	ValLen    int32
-	Offset    uint32
-	ExpiresAt time.Time
+// Align returns the smallest value >= v that is a multiple of n.
+func Align(v, n uint32) uint32 {
+	return (v + n - 1) &^ (n - 1)
+}
+
+// NextPow2 returns the smallest power of 2 >= v.
+func NextPow2(v uint32) uint32 {
+	if v == 0 {
+		return 1
+	}
+	v--
+	v |= v >> 1
+	v |= v >> 2
+	v |= v >> 4
+	v |= v >> 8
+	v |= v >> 16
+	v++
+	return v
 }

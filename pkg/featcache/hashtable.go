@@ -7,31 +7,39 @@ import (
 )
 
 // HashTable is an open-addressed, linear-probing hash table stored in shared memory.
-// It follows a single-writer / multiple-reader model: only the server inserts or
-// deletes entries; clients read via atomic loads only — no locks involved.
 //
-// Each slot is 16 bytes (see HashSlot). The table is a flat array of slots stored
-// immediately after the slab allocator metadata in the shared memory segment.
+// Single-writer / multiple-reader model:
+//   - Writer: uses CAS to claim slots, atomic store to mark status
+//   - Readers: atomic load to read status — no locks, no syscalls
 //
-// Concurrency guarantees:
-//   - Readers call Get concurrently with a writer calling Set/Delete.
-//   - A reader never sees a partially written slot because the writer stores
-//     Status last (with StoreUint32, which on x86 acts as a release store).
-//   - Delete uses a tombstone (SlotTomb) to preserve probe sequences.
+// Slot layout (24 bytes):
+//
+//	[hash:8B][offset:4B][vlen:4B][status:4B][pad:4B]
+//
+// The writer stores data BEFORE marking the slot as SlotUsed (release store),
+// so readers that observe SlotUsed will see the complete data.
 
-// HashTable provides lookup/insert/delete over the shared memory slot array.
+// HashTable provides lookup/insert/delete over a flat slot array in shared memory.
 type HashTable struct {
-	data     []byte
-	slotBase int
-	capacity int
-	mask     int
+	data     []byte // the full segment (or a test buffer)
+	slotBase int    // byte offset of first slot in data
+	dataBase int    // byte offset where the data region starts in data
+	capacity int    // number of slots (power of 2)
+	mask     int    // capacity - 1
 }
 
-// NewHashTable creates a HashTable handle for a shared memory segment.
-func NewHashTable(data []byte, slotBase int, capacity int) *HashTable {
+// NewHashTable creates a HashTable handle.
+//
+// Parameters:
+//   - data: the backing byte slice (shared memory or in-memory for tests)
+//   - slotBase: byte offset within data where the hash table starts
+//   - dataBase: byte offset within data where the data region starts
+//   - capacity: number of slots (must be a power of 2)
+func NewHashTable(data []byte, slotBase, dataBase, capacity int) *HashTable {
 	return &HashTable{
 		data:     data,
 		slotBase: slotBase,
+		dataBase: dataBase,
 		capacity: capacity,
 		mask:     capacity - 1,
 	}
@@ -46,26 +54,23 @@ func InitHashTable(data []byte, slotBase int, numSlots int) int {
 	return slotBase + slotBytes
 }
 
-// dataPtr returns an unsafe.Pointer to the first element of the byte slice.
-func dataPtr(b []byte) unsafe.Pointer {
-	return unsafe.Pointer(&b[0])
-}
-
-// getSlot reads slot idx and returns a copy (safe even under concurrent writes).
+// getSlot reads slot idx atomically and returns a copy.
 func (ht *HashTable) getSlot(idx int) HashSlot {
 	off := ht.slotBase + idx*SlotSize
+	status := atomic.LoadUint32((*uint32)(unsafe.Pointer(&ht.data[off+16])))
 	return HashSlot{
-		HashHigh: binary.LittleEndian.Uint32(ht.data[off : off+4]),
-		Status:   binary.LittleEndian.Uint32(ht.data[off+4 : off+8]),
-		Offset:   binary.LittleEndian.Uint32(ht.data[off+8 : off+12]),
-		VLen:     binary.LittleEndian.Uint32(ht.data[off+12 : off+16]),
+		Hash:   binary.LittleEndian.Uint64(ht.data[off : off+8]),
+		Offset: binary.LittleEndian.Uint32(ht.data[off+8 : off+12]),
+		VLen:   binary.LittleEndian.Uint32(ht.data[off+12 : off+16]),
+		Status: status,
 	}
 }
 
 // Get looks up a key. Returns the value slice (backed by shared memory) and true,
 // or nil and false if not found.
+//
+// The returned slice is a view into shared memory — callers must not modify it.
 func (ht *HashTable) Get(hash uint64, key []byte) ([]byte, bool) {
-	hashHigh := uint32(hash >> 32)
 	idx := int(uint32(hash)) & ht.mask
 
 	for i := 0; i < ht.capacity; i++ {
@@ -75,7 +80,7 @@ func (ht *HashTable) Get(hash uint64, key []byte) ([]byte, bool) {
 		case SlotEmpty:
 			return nil, false
 		case SlotUsed:
-			if slot.HashHigh == hashHigh && ht.matchKeyAt(slot.Offset, key) {
+			if slot.Hash == hash && ht.matchKeyAt(slot.Offset, key) {
 				val := ht.getValue(slot.Offset, slot.VLen)
 				return val, true
 			}
@@ -87,57 +92,28 @@ func (ht *HashTable) Get(hash uint64, key []byte) ([]byte, bool) {
 	return nil, false
 }
 
-// GetWithOffset is like Get but also returns the data offset in shared memory.
-func (ht *HashTable) GetWithOffset(hash uint64, key []byte) ([]byte, uint32, bool) {
-	hashHigh := uint32(hash >> 32)
-	idx := int(uint32(hash)) & ht.mask
-
-	for i := 0; i < ht.capacity; i++ {
-		slot := ht.getSlot(idx)
-		switch slot.Status {
-		case SlotEmpty:
-			return nil, 0, false
-		case SlotUsed:
-			if slot.HashHigh == hashHigh && ht.matchKeyAt(slot.Offset, key) {
-				val := ht.getValue(slot.Offset, slot.VLen)
-				return val, slot.Offset, true
-			}
-		}
-		idx = (idx + 1) & ht.mask
-	}
-	return nil, 0, false
-}
-
-// Set inserts or updates a key-value pair. Returns true on success.
-// offset and vlen must be relative to the data region.
-func (ht *HashTable) Set(hash uint64, key, value []byte, offset int32, vlen int32) bool {
-	hashHigh := uint32(hash >> 32)
+// Insert inserts a new key-value pair into the table.
+// Returns true on success, false if the table is full.
+//
+// offset and vlen are relative to DataOffset in the data region.
+// The caller MUST write the key-value data to the data region BEFORE calling Insert.
+func (ht *HashTable) Insert(hash uint64, key []byte, offset, vlen uint32) bool {
 	idx := int(uint32(hash)) & ht.mask
 
 	for i := 0; i < ht.capacity; i++ {
 		off := ht.slotBase + idx*SlotSize
-		status := atomic.LoadUint32((*uint32)(unsafe.Pointer(&ht.data[off+4])))
+		status := atomic.LoadUint32((*uint32)(unsafe.Pointer(&ht.data[off+16])))
 
 		if status == SlotEmpty || status == SlotTomb {
-			if !atomic.CompareAndSwapUint32((*uint32)(unsafe.Pointer(&ht.data[off+4])), status, SlotUsed) {
+			if !atomic.CompareAndSwapUint32((*uint32)(unsafe.Pointer(&ht.data[off+16])), status, SlotUsed) {
 				idx = (idx + 1) & ht.mask
 				continue
 			}
-			// Slot claimed — fill fields.
-			binary.LittleEndian.PutUint32(ht.data[off:off+4], hashHigh)
-			binary.LittleEndian.PutUint32(ht.data[off+8:off+12], uint32(offset))
-			binary.LittleEndian.PutUint32(ht.data[off+12:off+16], uint32(vlen))
+			// Slot claimed — write data fields.
+			binary.LittleEndian.PutUint64(ht.data[off:off+8], hash)
+			binary.LittleEndian.PutUint32(ht.data[off+8:off+12], offset)
+			binary.LittleEndian.PutUint32(ht.data[off+12:off+16], vlen)
 			return true
-		}
-
-		if status == SlotUsed {
-			existingHash := binary.LittleEndian.Uint32(ht.data[off : off+4])
-			if existingHash == hashHigh && ht.matchKeyAtSlot(idx, key) {
-				// Update value pointer.
-				binary.LittleEndian.PutUint32(ht.data[off+8:off+12], uint32(offset))
-				binary.LittleEndian.PutUint32(ht.data[off+12:off+16], uint32(vlen))
-				return true
-			}
 		}
 
 		idx = (idx + 1) & ht.mask
@@ -147,19 +123,18 @@ func (ht *HashTable) Set(hash uint64, key, value []byte, offset int32, vlen int3
 
 // Delete removes a key by setting its slot to tombstone.
 func (ht *HashTable) Delete(hash uint64, key []byte) bool {
-	hashHigh := uint32(hash >> 32)
 	idx := int(uint32(hash)) & ht.mask
 
 	for i := 0; i < ht.capacity; i++ {
 		off := ht.slotBase + idx*SlotSize
-		status := atomic.LoadUint32((*uint32)(unsafe.Pointer(&ht.data[off+4])))
+		status := atomic.LoadUint32((*uint32)(unsafe.Pointer(&ht.data[off+16])))
 
 		switch status {
 		case SlotEmpty:
 			return false
 		case SlotUsed:
-			if binary.LittleEndian.Uint32(ht.data[off:off+4]) == hashHigh && ht.matchKeyAtSlot(idx, key) {
-				atomic.StoreUint32((*uint32)(unsafe.Pointer(&ht.data[off+4])), SlotTomb)
+			if ht.slotHash(idx) == hash && ht.matchKeyAtSlot(idx, key) {
+				atomic.StoreUint32((*uint32)(unsafe.Pointer(&ht.data[off+16])), SlotTomb)
 				return true
 			}
 		}
@@ -168,23 +143,22 @@ func (ht *HashTable) Delete(hash uint64, key []byte) bool {
 	return false
 }
 
-// matchKeyAt reads the key stored at the given data offset and compares it.
+// matchKeyAt reads the key stored at data offset (relative to DataOffset)
+// and compares it with the given key.
 func (ht *HashTable) matchKeyAt(dataOff uint32, key []byte) bool {
-	if int(dataOff) >= len(ht.data) || dataOff == 0 {
+	absOff := ht.dataBase + int(dataOff)
+	if absOff+4 > len(ht.data) {
 		return false
 	}
-	if int(dataOff+4) > len(ht.data) {
-		return false
-	}
-	kLen := int(binary.LittleEndian.Uint32(ht.data[dataOff : dataOff+4]))
+	kLen := int(binary.LittleEndian.Uint32(ht.data[absOff : absOff+4]))
 	if kLen != len(key) {
 		return false
 	}
-	if int(dataOff)+4+kLen > len(ht.data) {
+	if absOff+4+kLen > len(ht.data) {
 		return false
 	}
 	for i := 0; i < kLen; i++ {
-		if ht.data[dataOff+4+uint32(i)] != key[i] {
+		if ht.data[absOff+4+i] != key[i] {
 			return false
 		}
 	}
@@ -198,17 +172,21 @@ func (ht *HashTable) matchKeyAtSlot(idx int, key []byte) bool {
 	return ht.matchKeyAt(dataOff, key)
 }
 
-// getValue reads a value from shared memory. Data layout at offset:
-// [keyLen:4B][keyBytes:keyLen][valueBytes:vLen].
+// slotHash returns the hash stored at slot idx.
+func (ht *HashTable) slotHash(idx int) uint64 {
+	off := ht.slotBase + idx*SlotSize
+	return binary.LittleEndian.Uint64(ht.data[off : off+8])
+}
+
+// getValue reads a value from shared memory.
+// Data layout at offset: [keyLen:4B][keyBytes:keyLen][valueBytes:vLen].
 func (ht *HashTable) getValue(dataOff uint32, vLen uint32) []byte {
-	if int(dataOff) >= len(ht.data) || dataOff == 0 {
+	absOff := ht.dataBase + int(dataOff)
+	if absOff+4 > len(ht.data) {
 		return nil
 	}
-	if int(dataOff+4) > len(ht.data) {
-		return nil
-	}
-	kLen := int(binary.LittleEndian.Uint32(ht.data[dataOff : dataOff+4]))
-	valOff := int(dataOff) + 4 + kLen
+	kLen := int(binary.LittleEndian.Uint32(ht.data[absOff : absOff+4]))
+	valOff := absOff + 4 + kLen
 	if valOff+int(vLen) > len(ht.data) {
 		return nil
 	}
@@ -217,26 +195,14 @@ func (ht *HashTable) getValue(dataOff uint32, vLen uint32) []byte {
 
 // SlotAt returns a copy of the slot at the given index.
 func (ht *HashTable) SlotAt(idx int) HashSlot {
-	off := ht.slotBase + idx*SlotSize
-	return HashSlot{
-		HashHigh: binary.LittleEndian.Uint32(ht.data[off : off+4]),
-		Status:   atomic.LoadUint32((*uint32)(unsafe.Pointer(&ht.data[off+4]))),
-		Offset:   binary.LittleEndian.Uint32(ht.data[off+8 : off+12]),
-		VLen:     binary.LittleEndian.Uint32(ht.data[off+12 : off+16]),
-	}
-}
-
-// MatchKeyAt is the public version of matchKeyAt.
-func (ht *HashTable) MatchKeyAt(dataOff uint32, key []byte) bool {
-	return ht.matchKeyAt(dataOff, key)
+	return ht.getSlot(idx)
 }
 
 // Count returns the number of used slots (O(n)).
 func (ht *HashTable) Count() int {
 	c := 0
 	for i := 0; i < ht.capacity; i++ {
-		off := ht.slotBase + i*SlotSize
-		if atomic.LoadUint32((*uint32)(unsafe.Pointer(&ht.data[off+4]))) == SlotUsed {
+		if ht.getSlot(i).Status == SlotUsed {
 			c++
 		}
 	}
@@ -246,16 +212,9 @@ func (ht *HashTable) Count() int {
 // Iterate calls fn for every used slot. If fn returns false, iteration stops.
 func (ht *HashTable) Iterate(fn func(slot HashSlot) bool) {
 	for i := 0; i < ht.capacity; i++ {
-		off := ht.slotBase + i*SlotSize
-		status := atomic.LoadUint32((*uint32)(unsafe.Pointer(&ht.data[off+4])))
-		if status == SlotUsed {
-			s := HashSlot{
-				HashHigh: binary.LittleEndian.Uint32(ht.data[off : off+4]),
-				Status:   status,
-				Offset:   binary.LittleEndian.Uint32(ht.data[off+8 : off+12]),
-				VLen:     binary.LittleEndian.Uint32(ht.data[off+12 : off+16]),
-			}
-			if !fn(s) {
+		slot := ht.getSlot(i)
+		if slot.Status == SlotUsed {
+			if !fn(slot) {
 				return
 			}
 		}
