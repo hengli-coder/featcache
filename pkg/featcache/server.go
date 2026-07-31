@@ -53,7 +53,7 @@ func (s *CacheServer) Listen() error {
 		return err
 	}
 	if len(s.udsAddr) > 0 && s.udsAddr[0] == '/' {
-		os.Chmod(s.udsAddr, 0777)
+		_ = os.Chmod(s.udsAddr, 0777)
 	}
 	s.ln = ln
 
@@ -115,7 +115,7 @@ func (s *CacheServer) handleConn(conn *net.UnixConn) {
 		resp = Response{Status: RespError}
 	}
 
-	EncodeResponse(conn, &resp)
+	_ = EncodeResponse(conn, &resp)
 }
 
 func (s *CacheServer) handleGetInfo() Response {

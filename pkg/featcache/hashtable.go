@@ -97,7 +97,7 @@ func (ht *HashTable) Get(hash uint64, key []byte) ([]byte, bool) {
 //
 // offset and vlen are relative to DataOffset in the data region.
 // The caller MUST write the key-value data to the data region BEFORE calling Insert.
-func (ht *HashTable) Insert(hash uint64, key []byte, offset, vlen uint32) bool {
+func (ht *HashTable) Insert(hash uint64, _ []byte, offset, vlen uint32) bool {
 	idx := int(uint32(hash)) & ht.mask
 
 	for i := 0; i < ht.capacity; i++ {

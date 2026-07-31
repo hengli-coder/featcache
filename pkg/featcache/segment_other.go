@@ -2,11 +2,11 @@
 
 package featcache
 
-func createSegment(name string, size int) (*Segment, error) {
+func createSegment(_ string, _ int) (*Segment, error) {
 	return nil, ErrNotSupported
 }
 
-func openSegment(name string) (*Segment, error) {
+func openSegment(_ string) (*Segment, error) {
 	return nil, ErrNotSupported
 }
 
