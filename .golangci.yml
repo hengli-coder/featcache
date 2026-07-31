@@ -1,0 +1,44 @@
+# featcache
+
+linters:
+  enable:
+    - gofmt         # 检查代码格式
+    - goimports     # 检查 import 排序
+    - govet         # Go vet
+    - errcheck      # 检查未处理的错误
+    - staticcheck   # 高级静态分析
+    - gosimple      # 简化代码
+    - ineffassign   # 检查无效赋值
+    - misspell      # 拼写检查
+    - revive        # 代码风格检查
+    - unconvert     # 检查不必要的类型转换
+    - prealloc      # 预分配 slice 建议
+    - bodyclose     # 检查 response body 是否关闭
+    - gosec         # 安全检查
+
+linters-settings:
+  gofmt:
+    simplify: true
+  goimports:
+    local-prefixes: github.com/hengli-coder/featcache
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  staticcheck:
+    checks:
+      - all
+      - -SA1029 # 允许使用字符串作为 context key（在测试中）
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosec
+    - path: cmd/featload/
+      linters:
+        - errcheck
+
+run:
+  timeout: 5m
+  go: '1.25'

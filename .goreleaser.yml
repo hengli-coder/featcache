@@ -1,0 +1,47 @@
+# GoReleaser configuration
+project_name: featcache
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: featload
+    main: ./cmd/featload
+    binary: featload
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - Merge pull request
+
+release:
+  github:
+    owner: hengli-coder
+    name: featcache
+  draft: false
+  prerelease: auto
