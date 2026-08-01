@@ -54,16 +54,20 @@ jobs:
           REPORT="golangci-lint-report.json"
           if [ -f "$REPORT" ]; then
             # Parse JSON report for severity counts
+            # Severity is set by the severity rules in .golangci.yml:
+            #   error   → P0/P1 (gosec → P0, other errors → P1)
+            #   warning → P2
+            #   info    → P3
             TOTAL=$(jq '.Issues | length' "$REPORT")
 
-            # P0: gosec security findings
+            # P0: gosec security findings (highest risk)
             P0=$(jq '[.Issues[] | select(.FromLinter == "gosec")] | length' "$REPORT")
-            # P1: errors from other linters
+            # P1: other errors
             P1=$(jq '[.Issues[] | select(.Severity == "error" and .FromLinter != "gosec")] | length' "$REPORT")
-            # P2: warnings / medium severity
-            P2=$(jq '[.Issues[] | select(.Severity == "warning" or .Severity == "medium")] | length' "$REPORT")
-            # P3: everything else (info/style/empty)
-            P3=$(jq '[.Issues[] | select(.Severity != "error" and .Severity != "warning" and .Severity != "medium" and .FromLinter != "gosec")] | length' "$REPORT")
+            # P2: warnings
+            P2=$(jq '[.Issues[] | select(.Severity == "warning")] | length' "$REPORT")
+            # P3: info / everything else
+            P3=$(jq '[.Issues[] | select(.Severity == "info" or .Severity == "")] | length' "$REPORT")
           else
             TOTAL=0; P0=0; P1=0; P2=0; P3=0
           fi

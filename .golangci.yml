@@ -6,6 +6,43 @@ version: "2"
 #   warning → CI warning (P2)
 #   info    → report only (P3)
 
+# ── Severity Configuration ──────────────────────────────────────
+# Maps linters to severity levels for CI governance.
+# These map to P0-P3 in lint-governance.yml for issue automation.
+severity:
+  default: warning
+  rules:
+    # P0/P1 — fail CI, block merge, create issues
+    - linters:
+        - gosec
+        - govet
+        - staticcheck
+        - errcheck
+        - bodyclose
+        - nilerr
+        - unused
+        - ineffassign
+      severity: error
+
+    # P2 — CI warning, create issues
+    - linters:
+        - revive
+        - gocritic
+        - unconvert
+        - copyloopvar
+        - gocyclo
+        - funlen
+        - nestif
+        - prealloc
+        - perfsprint
+      severity: warning
+
+    # P3 — report only, no issues
+    - linters:
+        - misspell
+        - godot
+      severity: info
+
 linters:
   enable:
     # ── Correctness & Bug Detection (P0/P1) ──────────────────────

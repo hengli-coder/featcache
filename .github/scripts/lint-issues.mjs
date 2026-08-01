@@ -101,19 +101,19 @@ function fingerprint(finding, repo) {
 }
 
 // Map golangci-lint finding to our P-levels.
-// golangci-lint v2 uses severity "error" | "warning" | "info" (defaults per linter);
-// gosec security findings are treated as P0 regardless of reported severity.
+// Severity is set by the severity rules in .golangci.yml:
+//   gosec → P0 (security), other errors → P1, warnings → P2, info → P3.
 function classifySeverity(finding) {
   const rule = (finding.FromLinter || finding.linter || finding.rule || '').toLowerCase();
 
-  // Gosec security rules → P0
+  // Gosec security rules → P0 regardless of reported severity
   if (rule === 'gosec') {
     return { level: 'P0', label: 'Critical' };
   }
 
   const sev = (finding.Severity || '').toLowerCase();
   if (sev === 'error') return { level: 'P1', label: 'High' };
-  if (sev === 'warning' || sev === 'medium') return { level: 'P2', label: 'Medium' };
+  if (sev === 'warning') return { level: 'P2', label: 'Medium' };
   return { level: 'P3', label: 'Low' };
 }
 
