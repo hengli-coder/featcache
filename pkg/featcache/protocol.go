@@ -36,8 +36,8 @@ const (
 
 // Request represents a parsed client request.
 type Request struct {
-	Op   OpCode
-	Key  []byte
+	Op  OpCode
+	Key []byte
 }
 
 // Response represents a server response.

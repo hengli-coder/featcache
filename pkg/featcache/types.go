@@ -46,25 +46,25 @@ const (
 //	44      4     Flags (reserved)
 //	48      16    Reserved
 type Header struct {
-	Magic       uint32
-	Version     uint32
-	Size        uint64
-	GenCounter  uint64
-	HashCap     uint32
-	HashOffset  uint32
-	DataOffset  uint32
-	DataEnd     uint32
-	SegmentID   uint32
-	Flags       uint32
-	Reserved    [16]byte
+	Magic      uint32
+	Version    uint32
+	Size       uint64
+	GenCounter uint64
+	HashCap    uint32
+	HashOffset uint32
+	DataOffset uint32
+	DataEnd    uint32
+	SegmentID  uint32
+	Flags      uint32
+	Reserved   [16]byte
 }
 
 // --- Slot status constants ---
 
 const (
-	SlotEmpty   uint32 = 0 // Slot has never been written
-	SlotUsed    uint32 = 1 // Slot holds a valid key-value pair
-	SlotTomb    uint32 = 2 // Logical deletion; preserves probe sequence
+	SlotEmpty uint32 = 0 // Slot has never been written
+	SlotUsed  uint32 = 1 // Slot holds a valid key-value pair
+	SlotTomb  uint32 = 2 // Logical deletion; preserves probe sequence
 )
 
 // --- HashSlot: 24 bytes, stored in the hash table region ---
@@ -76,11 +76,11 @@ const (
 //	16      4     Status (SlotEmpty / SlotUsed / SlotTomb)
 //	20      4     Reserved
 type HashSlot struct {
-	Hash    uint64 // full 64-bit hash — avoids key comparison on most lookups
-	Offset  uint32 // byte offset into data region (relative to DataOffset)
-	VLen    uint32 // value length in bytes
-	Status  uint32 // SlotEmpty / SlotUsed / SlotTomb
-	_       [4]byte
+	Hash   uint64 // full 64-bit hash — avoids key comparison on most lookups
+	Offset uint32 // byte offset into data region (relative to DataOffset)
+	VLen   uint32 // value length in bytes
+	Status uint32 // SlotEmpty / SlotUsed / SlotTomb
+	_      [4]byte
 }
 
 // --- OpCode for UDS protocol ---
@@ -88,14 +88,14 @@ type HashSlot struct {
 type OpCode byte
 
 const (
-	OpGetInfo    OpCode = 0x01 // Get segment metadata
-	OpGetStatus  OpCode = 0x02 // Get loader status
-	OpWatch      OpCode = 0x03 // Watch for version changes (Phase 2)
-	OpPin        OpCode = 0x04 // Pin data in memory (Phase 3)
-	OpPrefetch   OpCode = 0x05 // Prefetch data to cache (Phase 3)
-	OpEvict      OpCode = 0x06 // Evict cache data (Phase 3)
-	OpList       OpCode = 0x07 // List loaded datasets (Phase 3)
-	OpReload     OpCode = 0x08 // Trigger reload (Phase 3)
+	OpGetInfo   OpCode = 0x01 // Get segment metadata
+	OpGetStatus OpCode = 0x02 // Get loader status
+	OpWatch     OpCode = 0x03 // Watch for version changes (Phase 2)
+	OpPin       OpCode = 0x04 // Pin data in memory (Phase 3)
+	OpPrefetch  OpCode = 0x05 // Prefetch data to cache (Phase 3)
+	OpEvict     OpCode = 0x06 // Evict cache data (Phase 3)
+	OpList      OpCode = 0x07 // List loaded datasets (Phase 3)
+	OpReload    OpCode = 0x08 // Trigger reload (Phase 3)
 )
 
 // --- StatusCode for UDS responses ---

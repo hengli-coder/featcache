@@ -68,9 +68,9 @@ func TestHashTable_MultipleEntries(t *testing.T) {
 	InitHashTable(buf, slotBase, capacity)
 
 	entries := map[string]string{
-		"key1": "val1",
-		"key2": "val222",
-		"key3": "val333333",
+		"key1":     "val1",
+		"key2":     "val222",
+		"key3":     "val333333",
 		"user:abc": "embedding_data",
 	}
 
