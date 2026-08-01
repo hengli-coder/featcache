@@ -48,3 +48,6 @@ ehthumbs.db
 *.log
 *.bak
 *.tmp
+# Lint artifacts
+golangci-lint-report.json
+golangci-lint.sarif

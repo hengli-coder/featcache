@@ -11,6 +11,7 @@ severity_policy:
   P3: "informational"
 
 # Which severities trigger automatic GitHub Issue creation.
+# Format: YAML list items
 auto_create_issues:
   - P0
   - P1

@@ -20,31 +20,27 @@ import { resolve } from 'path';
 import { createHash } from 'crypto';
 
 // Minimal YAML parser — no external deps needed for the CI runner.
+// Supports nested maps and arrays of scalars.
 function parseYaml(text) {
-  const lines = text.split('\n');
   const result = {};
-  const stack = [{ obj: result, indent: -1 }];
-  const listStack = [];
+  const stack = [{ obj: result, indent: -1, arrayTarget: null }];
 
-  for (const raw of lines) {
+  for (const raw of text.split('\n')) {
     const trimmed = raw.trimEnd();
     if (trimmed.trim() === '' || trimmed.trim().startsWith('#')) continue;
 
     const indent = trimmed.length - trimmed.trimStart().length;
     const content = trimmed.trimStart();
 
-    // Array item
+    // Array item: "- value"
     if (content.startsWith('- ')) {
       const val = content.slice(2).trim();
-      if (stack.length > 0) {
-        const parent = stack[stack.length - 1].obj;
-        if (!Array.isArray(parent)) {
-          const key = Object.keys(parent).find(k => parent[k] === null && !Array.isArray(parent[k]));
-          if (key) parent[key] = [];
-        }
-        if (Array.isArray(parent)) {
-          parent.push(val);
-        }
+      while (stack.length > 0 && stack[stack.length - 1].indent >= indent) stack.pop();
+      const entry = stack[stack.length - 1];
+      if (entry.arrayTarget) {
+        const { obj, key } = entry.arrayTarget;
+        if (!Array.isArray(obj[key])) obj[key] = [];
+        obj[key].push(val);
       }
       continue;
     }
@@ -56,41 +52,22 @@ function parseYaml(text) {
     const rest = content.slice(colonIdx + 1).trim();
 
     // Pop stack to correct indent level
-    while (stack.length > 0 && stack[stack.length - 1].indent >= indent) {
-      stack.pop();
-    }
+    while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
+    const parent = stack[stack.length - 1];
 
     if (rest === '') {
-      // Nested object
+      // Nested object — remember its parent key so later "- " items attach here
       const newObj = {};
-      if (stack.length > 0) {
-        const parent = stack[stack.length - 1].obj;
-        if (Array.isArray(parent)) {
-          // Items in an array — push as object
-          parent.push(newObj);
-        } else {
-          parent[key] = newObj;
-        }
-      } else {
-        result[key] = newObj;
-      }
-      stack.push({ obj: newObj, indent });
+      parent.obj[key] = newObj;
+      stack.push({ obj: newObj, indent, arrayTarget: { obj: parent.obj, key } });
     } else {
       // Leaf value
       let val = rest;
-      if (val.startsWith('"') && val.endsWith('"')) {
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
         val = val.slice(1, -1);
       }
-      if (stack.length > 0) {
-        const parent = stack[stack.length - 1].obj;
-        if (Array.isArray(parent)) {
-          parent.push(val);
-        } else {
-          parent[key] = val;
-        }
-      } else {
-        result[key] = val;
-      }
+      parent.obj[key] = val;
+      stack[stack.length - 1].arrayTarget = null;
     }
   }
   return result;
@@ -111,35 +88,41 @@ function parseArgs() {
 }
 
 // Compute fingerprint for a finding
+// golangci-lint v2 JSON format:
+//   { "FromLinter": "gosec", "Text": "...", "Severity": "medium", "Pos": { "Filename": "main.go", "Line": 11, "Column": 9 } }
 function fingerprint(finding, repo) {
-  const raw = `${repo}:${finding.file || finding.path}:${finding.linter || finding.rule}:${finding.line || 0}:${finding.function || ''}`;
+  const path = finding.Pos?.Filename || finding.file || finding.path || 'unknown';
+  const rule = finding.FromLinter || finding.linter || finding.rule || 'unknown';
+  const line = finding.Pos?.Line || finding.line || 0;
+  // Include the message text so distinct findings at the same location don't collide
+  const msg = finding.Text || finding.text || finding.message || '';
+  const raw = `${repo}:${path}:${rule}:${line}:${msg.slice(0, 60)}`;
   return createHash('md5').update(raw).digest('hex').slice(0, 12);
 }
 
-// Map golangci-lint severity to our P-levels
+// Map golangci-lint finding to our P-levels.
+// golangci-lint v2 uses severity "error" | "warning" | "info" (defaults per linter);
+// gosec security findings are treated as P0 regardless of reported severity.
 function classifySeverity(finding) {
-  const sev = (finding.Severity || '').toLowerCase();
-  const rule = (finding.linter || finding.rule || '').toLowerCase();
+  const rule = (finding.FromLinter || finding.linter || finding.rule || '').toLowerCase();
 
   // Gosec security rules → P0
-  if (rule.startsWith('gosec') || rule.startsWith('G')) {
-    const gNum = parseInt(rule.replace(/^g/i, ''), 10);
-    if (!isNaN(gNum) && gNum >= 100 && gNum < 600) {
-      return { level: 'P0', label: 'Critical' };
-    }
+  if (rule === 'gosec') {
+    return { level: 'P0', label: 'Critical' };
   }
 
+  const sev = (finding.Severity || '').toLowerCase();
   if (sev === 'error') return { level: 'P1', label: 'High' };
-  if (sev === 'warning') return { level: 'P2', label: 'Medium' };
+  if (sev === 'warning' || sev === 'medium') return { level: 'P2', label: 'Medium' };
   return { level: 'P3', label: 'Low' };
 }
 
 // Build issue body from a finding
 function buildIssueBody(finding, severity, repo, runUrl) {
-  const rule = finding.linter || finding.rule || 'unknown';
-  const path = finding.file || finding.path || 'unknown';
-  const line = finding.line || 0;
-  const msg = finding.text || finding.message || 'No description';
+  const rule = finding.FromLinter || finding.linter || finding.rule || 'unknown';
+  const path = finding.Pos?.Filename || finding.file || finding.path || 'unknown';
+  const line = finding.Pos?.Line || finding.line || 0;
+  const msg = finding.Text || finding.text || finding.message || 'No description';
 
   return `## Summary
 
@@ -281,7 +264,7 @@ async function main() {
 
         await octokit.rest.issues.create({
           owner, repo: repoName,
-          title: `[${severity.level}] ${finding.linter || finding.rule || 'lint'}: ${(finding.text || finding.message || '').slice(0, 80)}`,
+          title: `[${severity.level}] ${finding.FromLinter || finding.linter || 'lint'}: ${(finding.Text || finding.text || finding.message || '').slice(0, 80)}`,
           body,
           labels: ['lint', severityLabel, fpLabel],
         });
