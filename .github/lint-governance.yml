@@ -1,0 +1,34 @@
+# Linter Governance Configuration
+# https://github.com/hengli-coder/shm-go
+version: 1
+
+# Severity policy for lint findings.
+# P0/P1 fail CI, P2 warns, P3 is informational.
+severity_policy:
+  P0: "fail_ci"
+  P1: "fail_ci"
+  P2: "warning"
+  P3: "informational"
+
+# Which severities trigger automatic GitHub Issue creation.
+auto_create_issues:
+  - P0
+  - P1
+  - P2
+
+# Labels applied to auto-created issues.
+issue_labels:
+  P0: "lint/critical"
+  P1: "lint/high"
+  P2: "lint/medium"
+  P3: "lint/low"
+
+# Fingerprint components for deduplication.
+# The fingerprint is: <repo>:<path>:<rule>:<line>:<function>
+fingerprint:
+  components:
+    - repository
+    - file_path
+    - rule_id
+    - line_number
+    - function_name

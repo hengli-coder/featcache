@@ -14,16 +14,86 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      issues: write
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
           cache: true
+
+      # ── golangci-lint with SARIF output ──────────────────────────
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
           version: latest
+          args: --out-format=sarif,json:golangci-lint-report.json
+        continue-on-error: true
+
+      # ── Upload SARIF to GitHub Code Scanning ─────────────────────
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: golangci-lint.sarif
+          category: golangci-lint
+        continue-on-error: true
+
+      # ── go vet ───────────────────────────────────────────────────
+      - name: go vet
+        run: go vet ./... 2>&1 | tee go-vet-output.txt
+        continue-on-error: true
+
+      # ── Generate lint summary ────────────────────────────────────
+      - name: Lint summary
+        id: lint-summary
+        run: |
+          REPORT="golangci-lint-report.json"
+          if [ -f "$REPORT" ]; then
+            # Parse JSON report for severity counts
+            TOTAL=$(jq '.Issues | length' "$REPORT")
+            ERRORS=$(jq '[.Issues[] | select(.Severity=="error")] | length' "$REPORT")
+            WARNINGS=$(jq '[.Issues[] | select(.Severity=="warning")] | length' "$REPORT")
+            INFO=$(jq '[.Issues[] | select(.Severity=="info" or .Severity=="style")] | length' "$REPORT")
+
+            # Classify: gosec errors → P0, other errors → P1
+            P0=$(jq '[.Issues[] | select(.Severity=="error" and (.FromLinter | test("(?i)gosec|G\\d"))) ] | length' "$REPORT")
+            P1=$((ERRORS - P0))
+            P2=$WARNINGS
+            P3=$INFO
+          else
+            TOTAL=0; P0=0; P1=0; P2=0; P3=0
+          fi
+
+          echo "## Lint Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔴 P0 Critical | $P0 |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🟠 P1 High | $P1 |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🟡 P2 Medium | $P2 |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⚪ P3 Low | $P3 |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Total** | **$TOTAL** |" >> $GITHUB_STEP_SUMMARY
+
+          echo "p0=$P0" >> $GITHUB_OUTPUT
+          echo "p1=$P1" >> $GITHUB_OUTPUT
+          echo "p2=$P2" >> $GITHUB_OUTPUT
+          echo "p3=$P3" >> $GITHUB_OUTPUT
+
+      # ── Issue automation (push to main only) ─────────────────────
+      - name: Lint issue automation
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f "golangci-lint-report.json" ]; then
+            node .github/scripts/lint-issues.mjs \
+              --report golangci-lint-report.json \
+              --config .github/lint-governance.yml
+          fi
 
   test:
     name: Test
