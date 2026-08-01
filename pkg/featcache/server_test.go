@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net"
 	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -129,11 +128,10 @@ func TestCacheServerUnknownOp(t *testing.T) {
 
 func TestCacheServerCloseAndDestroy(t *testing.T) {
 	// Close (not destroy) leaves the backing file in place.
-	addr := filepath.Join(t.TempDir(), "featcache-test.sock")
 	s := &CacheServer{
 		segmentName: "close-test",
 		segmentSize: 64*1024 + 1024*1024,
-		udsAddr:     addr,
+		udsAddr:     "", // no UDS path → Close skips unlink
 		seg:         &Segment{name: "close-test", data: make([]byte, 64*1024+1024*1024), cap: 64*1024 + 1024*1024},
 	}
 	if err := s.Close(); err != nil {
@@ -141,11 +139,10 @@ func TestCacheServerCloseAndDestroy(t *testing.T) {
 	}
 
 	// Destroy on a fresh server.
-	addr2 := filepath.Join(t.TempDir(), "featcache-test2.sock")
 	s2 := &CacheServer{
 		segmentName: "destroy-test",
 		segmentSize: 64*1024 + 1024*1024,
-		udsAddr:     addr2,
+		udsAddr:     "",
 		seg:         &Segment{name: "destroy-test", data: make([]byte, 64*1024+1024*1024), cap: 64*1024 + 1024*1024},
 	}
 	if err := s2.Destroy(); err != nil {
