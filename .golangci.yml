@@ -1,23 +1,112 @@
 version: "2"
+
+# Linter governance configuration for featcache.
+# Severity-based classification:
+#   error   → fail CI, block merge (P0/P1)
+#   warning → CI warning (P2)
+#   info    → report only (P3)
+
 linters:
   enable:
-    - bodyclose
-    - gosec
-    - misspell
-    - prealloc
-    - revive
-    - unconvert
+    # ── Correctness & Bug Detection (P0/P1) ──────────────────────
+    - govet        # static analysis of Go code (shadow, printf, etc.)
+    - staticcheck  # comprehensive static analysis (includes gosimple, stylecheck)
+    - errcheck     # unchecked error returns
+    - ineffassign  # ineffective assignments
+    - unused       # unused code (functions, variables, types)
+    - nilerr       # returning nil where error expected
+    - bodyclose    # HTTP response body closure
+
+    # ── Security (P0) ────────────────────────────────────────────
+    - gosec        # security-related checks
+
+    # ── Concurrency & Resource Safety (P0/P1) ────────────────────
+    - copyloopvar  # loop variable capture in closures
+
+    # ── Maintainability & Code Quality (P2) ──────────────────────
+    - revive       # comprehensive code style checker
+    - gocritic     # opinionated Go code quality checks
+    - unconvert    # unnecessary type conversions
+    - misspell     # common English misspellings
+    - godot        # comments ending with a period
+
+    # ── Complexity Analysis (P2) ─────────────────────────────────
+    - gocyclo      # cyclomatic complexity
+    - funlen       # function length
+    - nestif       # nested if depth
+
+    # ── Performance (P2) ─────────────────────────────────────────
+    - prealloc     # slice preallocation suggestions
+    - perfsprint   # performance-focused string formatting
+
   settings:
+    # ── Error handling ────────────────────────────────────────────
     errcheck:
       check-type-assertions: true
       check-blank: true
+
+    # ── Static analysis ───────────────────────────────────────────
     staticcheck:
       checks:
         - all
-        - -SA1029
+        - -SA1029    # allow string context keys
+
+    # ── Security ──────────────────────────────────────────────────
     gosec:
       excludes:
-        - G115
+        - G115       # integer overflow conversion (intentional)
+
+    # ── Complexity thresholds ─────────────────────────────────────
+    gocyclo:
+      min-complexity: 20
+
+    funlen:
+      lines: 80
+      statements: 50
+
+    nestif:
+      min-complexity: 5
+
+    # ── Code style ────────────────────────────────────────────────
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: exported
+        - name: increment-decrement
+        - name: var-naming
+          arguments:
+            - ["ID", "URL", "URLs", "API", "APIs", "IP", "IPS"]
+        - name: var-declaration
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unused-parameter
+        - name: unreachable-code
+        - name: redefines-builtin-id
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+        - experimental
+        - opinionated
+      disabled-checks:
+        - hugeParam
+        - rangeValCopy
+        - whyNoLint
+        - paramTypeCombine  # too opinionated, readability varies
+        - commentedOutCode   # false positive on algorithm comments
+
   exclusions:
     generated: lax
     presets:
@@ -26,20 +115,33 @@ linters:
       - legacy
       - std-error-handling
     rules:
+      # Don't enforce errcheck/gosec in tests
       - linters:
           - errcheck
           - gosec
         path: _test\.go
+      # Main entry point has unavoidable error paths
       - linters:
           - errcheck
         path: cmd/featload/
+      # Server uses intentionally relaxed error handling
       - linters:
           - errcheck
         path: pkg/featcache/server\.go
+      # Allow longer functions in loader/reader
+      - linters:
+          - funlen
+        path: pkg/featcache/(loader|reader)\.go
+      # Hash table uses intentional integer truncation
+      - linters:
+          - gosec
+        path: pkg/featcache/hashtable\.go
     paths:
       - third_party$
       - builtin$
       - examples$
+
+# ── Formatting (separate from linters) ─────────────────────────
 formatters:
   enable:
     - gofmt
