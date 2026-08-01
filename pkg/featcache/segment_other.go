@@ -29,6 +29,7 @@ func (s *Segment) close() error {
 		return nil
 	}
 	// In-memory segment: no-op, just clear the data.
+	_ = s.mapped
 	s.data = nil
 	return nil
 }

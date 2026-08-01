@@ -40,7 +40,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("create loader: %v", err)
 	}
-	defer loader.Destroy()
 
 	if err := loader.Init(2); err != nil {
 		log.Fatalf("init loader: %v", err)
@@ -66,7 +65,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("create reader: %v", err)
 	}
-	defer reader.Close()
 
 	// ─── Zero-copy lookups ────────────────────────────────────────────
 	val, ok := reader.Get([]byte("user:123:emb"))
@@ -84,4 +82,13 @@ func main() {
 	fmt.Printf("✓ batch: found=%v (expected miss)\n", results[1])
 
 	fmt.Println("\nDone! All operations completed successfully.")
+
+	// Explicit cleanup: the reader must be closed before the segment is
+	// destroyed so the in-memory segment's data is still valid.
+	if err := reader.Close(); err != nil {
+		log.Printf("close reader: %v", err)
+	}
+	if err := loader.Destroy(); err != nil {
+		log.Printf("destroy loader: %v", err)
+	}
 }

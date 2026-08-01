@@ -18,18 +18,17 @@ package featcache
 
 import (
 	"os"
-	"path/filepath"
 
 	"golang.org/x/sys/unix"
 )
 
 func devShmPath(name string) string {
-	return filepath.Join("/dev/shm", name)
+	return "/dev/shm/" + name
 }
 
 func createSegment(name string, size int) (*Segment, error) {
 	path := devShmPath(name)
-	fd, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+	fd, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return nil, err
 	}
@@ -47,15 +46,16 @@ func createSegment(name string, size int) (*Segment, error) {
 	}
 
 	return &Segment{
-		name: name,
-		data: data,
-		cap:  size,
+		name:   name,
+		data:   data,
+		cap:    size,
+		mapped: true,
 	}, nil
 }
 
 func openSegment(name string) (*Segment, error) {
 	path := devShmPath(name)
-	fd, err := os.OpenFile(path, os.O_RDWR, 0600)
+	fd, err := os.OpenFile(path, os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, err
 	}
@@ -73,9 +73,10 @@ func openSegment(name string) (*Segment, error) {
 	}
 
 	return &Segment{
-		name: name,
-		data: data,
-		cap:  size,
+		name:   name,
+		data:   data,
+		cap:    size,
+		mapped: true,
 	}, nil
 }
 
@@ -83,9 +84,17 @@ func (s *Segment) close() error {
 	if s.data == nil {
 		return nil
 	}
-	err := unix.Munmap(s.data)
+	// Only unmap memory obtained from unix.Mmap. In-memory test segments
+	// (make([]byte, ...)) are not registered with the syscall mapper and
+	// Munmap would return EINVAL ("invalid argument").
+	if s.mapped {
+		s.mapped = false
+		if err := unix.Munmap(s.data); err != nil {
+			return err
+		}
+	}
 	s.data = nil
-	return err
+	return nil
 }
 
 func (s *Segment) destroy() error {

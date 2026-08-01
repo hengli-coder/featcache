@@ -28,6 +28,10 @@ type Segment struct {
 	name string
 	data []byte
 	cap  int
+
+	// mapped reports whether data was obtained from unix.Mmap (Linux) and
+	// must be unmapped on close. In-memory test segments skip munmap.
+	mapped bool
 }
 
 // CreateSegment creates a new shared memory segment with the given name and size.
