@@ -21,6 +21,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/hengli-coder/featcache/pkg/featcache"
@@ -47,7 +48,7 @@ func main() {
 
 	// Convert \x00 prefix string to actual null byte for abstract sockets.
 	udsAddr := *udsPath
-	if len(udsAddr) > 0 && udsAddr[0] == '\\' && udsAddr[1] == 'x' && udsAddr[2] == '0' && udsAddr[3] == '0' {
+	if strings.HasPrefix(udsAddr, "\\x00") {
 		udsAddr = "\x00" + udsAddr[4:]
 	}
 
