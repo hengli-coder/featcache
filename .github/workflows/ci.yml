@@ -53,20 +53,11 @@ jobs:
         run: |
           REPORT="golangci-lint-report.json"
           if [ -f "$REPORT" ]; then
-            # Parse JSON report for severity counts
-            # Severity is set by the severity rules in .golangci.yml:
-            #   error   → P0/P1 (gosec → P0, other errors → P1)
-            #   warning → P2
-            #   info    → P3
             TOTAL=$(jq '.Issues | length' "$REPORT")
 
-            # P0: gosec security findings (highest risk)
             P0=$(jq '[.Issues[] | select(.FromLinter == "gosec")] | length' "$REPORT")
-            # P1: other errors
             P1=$(jq '[.Issues[] | select(.Severity == "error" and .FromLinter != "gosec")] | length' "$REPORT")
-            # P2: warnings
             P2=$(jq '[.Issues[] | select(.Severity == "warning")] | length' "$REPORT")
-            # P3: info / everything else
             P3=$(jq '[.Issues[] | select(.Severity == "info" or .Severity == "")] | length' "$REPORT")
           else
             TOTAL=0; P0=0; P1=0; P2=0; P3=0
@@ -86,6 +77,23 @@ jobs:
           echo "p1=$P1" >> $GITHUB_OUTPUT
           echo "p2=$P2" >> $GITHUB_OUTPUT
           echo "p3=$P3" >> $GITHUB_OUTPUT
+
+      # ── Fail CI on P0/P1 lint errors ─────────────────────────────
+      # P0/P1 (error severity) block merge; P2/P3 report only.
+      - name: Fail on blocking lint findings
+        if: always()
+        run: |
+          P0="${{ steps.lint-summary.outputs.p0 }}"
+          P1="${{ steps.lint-summary.outputs.p1 }}"
+          if [ -n "$P0" ] && [ "$P0" != "0" ]; then
+            echo "❌ $P0 critical (P0) lint findings — merge blocked"
+            exit 1
+          fi
+          if [ -n "$P1" ] && [ "$P1" != "0" ]; then
+            echo "❌ $P1 high (P1) lint findings — merge blocked"
+            exit 1
+          fi
+          echo "✅ No blocking lint findings"
 
       # ── Issue automation (push to main only) ─────────────────────
       - name: Lint issue automation
@@ -111,12 +119,32 @@ jobs:
         with:
           go-version: '1.25'
           cache: true
-      - name: Unit tests
+      - name: Unit tests (race)
         run: go test ./pkg/featcache/ -v -count=1 -race
-      - name: Coverage report
+      - name: License header check
+        run: bash scripts/check_license.sh
+
+  coverage:
+    name: Coverage gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - name: Collect coverage
         run: |
-          go test ./pkg/featcache/ -coverprofile=coverage.out -covermode=atomic -count=1
+          go test ./... -coverprofile=coverage.out -covermode=atomic -count=1
           go tool cover -func=coverage.out
+      - name: Enforce coverage threshold (70%)
+        run: bash scripts/check_coverage.sh coverage.out 70
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 7
 
   bench:
     name: Benchmark
@@ -150,3 +178,34 @@ jobs:
         with:
           name: featload-${{ matrix.goos }}-${{ matrix.goarch }}
           path: featload-${{ matrix.goos }}-${{ matrix.goarch }}
+
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      # ── Go vulnerability scan ────────────────────────────────────
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+        continue-on-error: false
+
+      # ── CodeQL static analysis ───────────────────────────────────
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: go
+          queries: security-and-quality
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3

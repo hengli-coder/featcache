@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "description": "Approved AI development skills and tools for featcache. AI agents must only use skills listed here and follow the validation steps.",
+  "updated": "2026-08-01",
+
+  "allowed_tools": [
+    "bash",
+    "read",
+    "write",
+    "edit",
+    "grep",
+    "glob",
+    "web_search",
+    "web_fetch"
+  ],
+
+  "required_skills": [
+    {
+      "name": "golang-lint",
+      "source": "samber/cc-skills-golang",
+      "purpose": "golangci-lint configuration and interpretation"
+    },
+    {
+      "name": "golang-testing",
+      "source": "samber/cc-skills-golang",
+      "purpose": "table-driven tests, coverage, CI testing patterns"
+    },
+    {
+      "name": "golang-code-style",
+      "source": "samber/cc-skills-golang",
+      "purpose": "Go style conventions: line breaks, comments, control flow"
+    },
+    {
+      "name": "golang-naming",
+      "source": "samber/cc-skills-golang",
+      "purpose": "Go naming conventions (packages, functions, errors, receivers)"
+    },
+    {
+      "name": "golang-error-handling",
+      "source": "samber/cc-skills-golang",
+      "purpose": "idiomatic error wrapping and logging"
+    },
+    {
+      "name": "golang-concurrency",
+      "source": "samber/cc-skills-golang",
+      "purpose": "single-writer/multi-reader, atomic operations, lock-free patterns"
+    },
+    {
+      "name": "golang-performance",
+      "source": "samber/cc-skills-golang",
+      "purpose": "hot-path optimization for the zero-copy read path"
+    },
+    {
+      "name": "golang-benchmark",
+      "source": "samber/cc-skills-golang",
+      "purpose": "benchmark methodology for read-path latency measurements"
+    },
+    {
+      "name": "golang-security",
+      "source": "samber/cc-skills-golang",
+      "purpose": "shared memory and socket security review"
+    },
+    {
+      "name": "golang-continuous-integration",
+      "source": "samber/cc-skills-golang",
+      "purpose": "GitHub Actions workflows for Go"
+    },
+    {
+      "name": "golang-documentation",
+      "source": "samber/cc-skills-golang",
+      "purpose": "godoc comments and README standards"
+    },
+    {
+      "name": "security-review",
+      "source": "getsentry/skills",
+      "purpose": "security review of changes"
+    }
+  ],
+
+  "optional_skills": [
+    "golang-project-layout",
+    "golang-design-patterns",
+    "golang-data-structures",
+    "golang-refactoring",
+    "golang-safety",
+    "golang-modernize",
+    "golang-stretchr-testify",
+    "golang-dependency-management",
+    "golang-pkg-go-dev",
+    "golang-gopls"
+  ],
+
+  "prohibited_actions": [
+    "massive unrequested refactoring",
+    "editing .golangci.yml to mask lint warnings without justification",
+    "disabling or deleting tests to pass CI",
+    "adding unreviewed third-party dependencies",
+    "locks or syscalls on the read path (violates architecture)",
+    "changes outside the scope of the assigned task"
+  ],
+
+  "required_validation_steps": [
+    "go build ./...",
+    "go test ./... -count=1 -race",
+    "go test ./... -coverprofile=coverage.out -covermode=atomic -count=1",
+    "bash scripts/check_coverage.sh coverage.out 70",
+    "golangci-lint run ./...",
+    "go vet ./...",
+    "bash scripts/check_license.sh"
+  ],
+
+  "coding_standards": [
+    "gofmt -s formatting (checked in CI)",
+    "godoc comments on all exported identifiers",
+    "errors wrapped with %w",
+    "no locks/syscalls on the read path",
+    "build tags: linux (real impl) + !linux (stubs) must stay in sync",
+    "new code ships with tests; coverage never decreases"
+  ],
+
+  "review_requirements": [
+    "human review required before any PR submission",
+    "PR must pass all required_validation_steps",
+    "PR description discloses AI usage scope (see AI_CONTRIBUTING.md)",
+    "maintainers review at normal standards — AI generation does not lower the bar"
+  ]
+}

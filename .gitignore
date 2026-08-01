@@ -51,3 +51,7 @@ ehthumbs.db
 # Lint artifacts
 golangci-lint-report.json
 golangci-lint.sarif
+
+# Release artifacts
+dist/
+goreleaser/

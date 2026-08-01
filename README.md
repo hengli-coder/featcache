@@ -1,175 +1,349 @@
-# featcache — AI 特征向量的零拷贝运行时缓存
+# featcache
 
-> 一次加载，多进程零拷贝共享，热切换
+> Zero-copy runtime data cache for AI inference.
+> Load once. Share across processes with zero-copy reads. Hot-swap ready.
 
+[![Go Version](https://img.shields.io/github/go-mod/go-version/hengli-coder/featcache)](https://github.com/hengli-coder/featcache)
 [![Go Report Card](https://goreportcard.com/badge/github.com/hengli-coder/featcache)](https://goreportcard.com/report/github.com/hengli-coder/featcache)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/hengli-coder/featcache/actions/workflows/ci.yml/badge.svg)](https://github.com/hengli-coder/featcache/actions/workflows/ci.yml)
+[![Release](https://github.com/hengli-coder/featcache/actions/workflows/release.yml/badge.svg)](https://github.com/hengli-coder/featcache/actions/workflows/release.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
+[中文文档](README.zh-CN.md)
 
 ---
 
-## 概述
+## What is featcache?
 
-**featcache** 是一个面向 AI 推理场景的零拷贝运行时数据缓存。它解决的核心问题是：
+**featcache** is a zero-copy runtime data cache for AI inference. It solves one problem:
 
-> AI 推理进程启动时，大量静态数据（Embedding、Tokenizer、Feature Dictionary 等）的重复加载导致启动慢、资源浪费。
+> Inference processes re-load large static datasets (embeddings, tokenizer vocabularies, feature dictionaries) on every startup — slow startup, wasted memory.
 
-### 工作原理
+With a traditional setup, N inference processes each load their own copy of 10GB+ of data. featcache loads the data **once**, writes it into a POSIX shared memory segment, and lets every process read it directly — zero-copy, lock-free, syscall-free.
 
 ```
-┌──────────────────────────┐   一次加载    ┌──────────────────┐
-│  Loader 守护进程          │ ───────────► │  共享内存段       │
-│  • 从数据源加载工件         │              │  [Header]        │
-│  • 写入共享内存，构建索引    │              │  [Hash Index]    │
-│  • 监听控制面 UDS          │              │  [Data Region]   │
-│  • 支持热切换              │              └──────┬───────────┘
-└──────────────────────────┘                     │ mmap
-                                                 ▼
-                                    ┌──────────────────────────┐
-                                    │  推理进程 1  推理进程 2  │
-                                    │  推理进程 3  ... 进程 N  │
-                                    │  直接读共享内存，零拷贝   │
-                                    │  无锁，无 syscall        │
-                                    └──────────────────────────┘
+┌───────────────────────┐   load once   ┌───────────────────────┐
+│  Loader (featload)    │ ────────────► │  Shared Memory Segment │
+│  • reads DataSource   │               │  [Header]              │
+│  • writes segment     │               │  [Hash Index]          │
+│  • builds hash index  │               │  [Data Region]         │
+│  • serves UDS control │               └──────────┬────────────┘
+└───────────────────────┘                          │ mmap
+                                                   ▼
+                            ┌────────────────────────────────────┐
+                            │ Inference proc 1   proc 2   ... N  │
+                            │ Read directly from shared memory   │
+                            │ Zero-copy · no locks · no syscalls │
+                            └────────────────────────────────────┘
 ```
 
-### 适用场景
+### Key features
 
-| 场景 | 数据示例 | 典型大小 |
-|------|---------|---------|
-| 推荐系统 | User/Item Embedding 表 | 10GB~100GB |
-| LLM 推理 | Tokenizer 词汇表、BPE 编码 | 1GB~10GB |
-| 多模态模型 | 图像/文本特征字典 | 5GB~50GB |
-| 广告 CTR 预估 | 稀疏特征字典、Lookup 表 | 10GB~30GB |
-| RAG 系统 | 文档 Embedding 库 | 10GB~100GB |
-| 搜索引擎 | ANN 索引、倒排表 | 5GB~50GB |
+- **Zero-copy reads** — clients read directly from shared memory; lookups are plain memory accesses
+- **Load once, share everywhere** — N processes share a single copy of the data
+- **Instant startup** — inference processes just `mmap`; startup cost is independent of data size
+- **Compact storage** — append-only data region with no internal fragmentation
+- **Pure Go** — the only external dependency is `golang.org/x/sys` (for `mmap`)
+- **Hot swap** *(Phase 2)* — replace data at runtime without restarting services
 
-### 核心特性
+### Use cases
 
-- **零拷贝读取** — 客户端直接读共享内存，查询延迟 < 100ns
-- **一次加载，多进程共享** — Loader 加载一次，N 个进程共享同一份数据
-- **启动即用** — 推理进程启动仅需 mmap，< 100ms，与数据量无关
-- **热切换**（二期）— 运行时替换数据，不中断服务
-- **紧凑存储** — 无内部碎片，10GB+ 数据量节省 30%+ 空间
-- **纯 Go** — 仅依赖 `golang.org/x/sys`
-
-### 与其他方案的对比
-
-| 方案 | 零拷贝多进程共享 | 查询延迟 | 热更新 | 10GB+ 优化 | 外部依赖 |
-|------|----------------|---------|--------|-----------|---------|
-| **featcache** | ✅ | < 100ns | ✅ (二期) | ✅ | 无 |
-| Redis | ❌ 网络通信 | ~100μs | ✅ | ❌ | 无 |
-| FAISS | ⚠️ mmap 共享 | < 100ns | ❌ | ✅ | C++ |
-| Plasma (已废弃) | ✅ | < 100ns | ❌ | ❌ | C++ |
-| Safetensors | ❌ 各自 mmap | < 100ns | ❌ | ✅ | Python/C++ |
+| Scenario | Data examples | Typical size |
+|----------|---------------|--------------|
+| Recommendation systems | User/item embedding tables | 10GB – 100GB |
+| LLM inference | Tokenizer vocabularies, BPE encodings | 1GB – 10GB |
+| Multimodal models | Image/text feature dictionaries | 5GB – 50GB |
+| Ad CTR prediction | Sparse feature dictionaries, lookup tables | 10GB – 30GB |
+| RAG systems | Document embedding stores | 10GB – 100GB |
+| Search engines | ANN indexes, inverted indexes | 5GB – 50GB |
 
 ---
 
-## 快速开始
+## Installation
+
+### Prerequisites
+
+- Go 1.25+
+- Linux (POSIX shared memory + `mmap`; see [Platform support](#platform-support))
+
+### Install the loader daemon
 
 ```bash
-# 构建
+go install github.com/hengli-coder/featcache/cmd/featload@latest
+```
+
+Or download a pre-built binary from the [Releases](https://github.com/hengli-coder/featcache/releases) page.
+
+### Use as a library
+
+```bash
+go get github.com/hengli-coder/featcache
+```
+
+---
+
+## Quick start
+
+### 1. Load data and start the daemon
+
+The `featload` daemon creates a shared memory segment and serves the UDS control plane. Data loading is done through the `Loader` API (below) — a `-source` CLI flag is planned (see [roadmap](docs/design/roadmap.md)).
+
+```bash
+# Build
 go build ./cmd/featload
 
-# 启动加载器（加载 10GB embedding 到共享内存）
-featload -name my-embeddings -size 10737418240 -source /data/embeddings.bin
+# Start the daemon (segment "my-embeddings", 2 GB by default)
+featload -name my-embeddings -size 10737418240
 
-# 推理进程中使用 Reader
+# Options
+featload -name featcache -size 2147483648 -uds '\x00featcache' -version
 ```
+
+### 2. Load data with the Loader API
 
 ```go
-import "github.com/hengli-coder/featcache"
+import "github.com/hengli-coder/featcache/pkg/featcache"
 
-// 初始化 Reader（< 100ms，无论数据多大）
-reader, err := featcache.NewReader("\x00featcache-my-embeddings")
+loader, err := featcache.NewLoader(featcache.LoaderConfig{
+    SegmentName: "my-embeddings",
+    SegmentSize: 10 << 30, // 10 GB
+})
+if err != nil { /* handle */ }
+defer loader.Destroy()
 
-// 查询特征向量（纳秒级）
+if err := loader.Init(10_000_000); err != nil { /* handle */ } // pre-size hash table
+
+// From a binary file
+ds := featcache.NewFileDataSource("/data/embeddings.bin")
+count, err := loader.Load(ds) // Load calls ds.Open() internally
+if err != nil { /* handle */ }
+
+// Or from an in-memory map (tests / demos)
+ds2 := featcache.NewMapDataSource(map[string][]byte{"key": []byte("value")})
+count, err = loader.Load(ds2)
+```
+
+### 3. Read from inference processes
+
+```go
+// Initialize the Reader — one UDS round-trip for metadata, then pure shared memory.
+reader, err := featcache.NewReader("my-embeddings", "\x00featcache")
+if err != nil { /* handle */ }
+defer reader.Close()
+
+// Lookup (memory-speed)
 embedding, ok := reader.Get([]byte("user_embedding_123"))
+if !ok { /* miss */ }
+
+// Batch lookup
+keys := [][]byte{[]byte("user_1"), []byte("user_2")}
+values, results := reader.GetBatch(keys)
 ```
+
+> **Warning**: the byte slice returned by `Get` is a view into shared memory — **do not modify it**. Copy it first if you need to mutate it.
+
+### 4. Run the demo (Linux)
+
+```bash
+go run ./examples/featload-demo
+```
+
+The demo loads a small dataset via `MapDataSource`, then reads it back zero-copy in the same process.
 
 ---
 
-## 架构
+## Configuration
 
-详见 [DESIGN.md](docs/DESIGN.md)
+### featload CLI
 
-### 数据流
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-name` | `featcache` | Shared memory segment name |
+| `-size` | `2GB` | Segment size in bytes |
+| `-uds` | `\x00featcache` | UDS address (`\x00` prefix = abstract namespace) |
+| `-version` | `false` | Print version info and exit |
 
-```
-Loader 启动 → 从数据源加载 → 写入共享内存 → 就绪
-                                                 ↓
-推理进程启动 → UDS 获取元数据 → mmap 共享内存 → 直接查询
-                                                 ↓
-               所有 GET 操作走共享内存，不走 UDS
-```
+### LoaderConfig
 
-### 控制面与数据面分离
+| Field | Default | Description |
+|-------|---------|-------------|
+| `SegmentName` | — | Shared memory segment name |
+| `SegmentSize` | `2GB` | Segment size in bytes |
+| `LoadFactor` | `0.5` | Hash table load factor (0.0–1.0) |
 
-- **控制面**：Unix Domain Socket，仅用于初始化和版本通知
-- **数据面**：共享内存，所有数据读取直接在这里完成
+### Built-in data sources
+
+| Source | Format |
+|--------|--------|
+| `NewFileDataSource(path)` | Binary: `[keyLen:4B LE][key][valLen:4B LE][val]` per entry |
+| `NewLineDataSource(path)` | Text: one `key\tvalue` line per entry |
+| `NewMapDataSource(map)` | In-memory map (tests / demos) |
+
+Implement the [DataSource](pkg/featcache/datasource.go) interface for custom sources (database, object store, stream).
 
 ---
 
-## 项目结构
+## Architecture
+
+featcache separates the **control plane** from the **data plane**:
+
+- **Control plane** — Unix Domain Socket, used only for initialization and metadata (`GET_INFO` / `GET_STATUS`)
+- **Data plane** — shared memory; every data read happens here, never over UDS
+
+```
+Loader starts → reads DataSource → writes segment → ready
+                                              ↓
+Inference process starts → UDS metadata → mmap segment → query directly
+                                              ↓
+            All GET operations go through shared memory, never UDS
+```
+
+Documentation:
+
+- [Architecture overview](docs/architecture/overview.md)
+- [Memory layout](docs/architecture/memory-layout.md)
+- [Concurrency model](docs/architecture/concurrency.md)
+- [Control-plane protocol](docs/architecture/control-plane.md)
+- [Design documents](docs/design/)
+- [Architecture Decision Records (ADRs)](docs/design/ADRs.md)
+
+### Platform support
+
+Linux only. The codebase uses build tags:
+
+- `//go:build linux` — real implementation (`/dev/shm` + `mmap` via `golang.org/x/sys/unix`)
+- `//go:build !linux` — stubs returning `ErrNotSupported`
+
+Core logic is tested with in-memory byte slices, so tests run on any platform (including macOS).
+
+---
+
+## Project layout
 
 ```
 featcache/
-├── go.mod / go.sum
-├── README.md
-├── CLAUDE.md
-├── .golangci.yml
-├── .gitignore
 ├── cmd/
-│   └── featload/           # Loader 守护进程入口
-│       └── main.go
-└── pkg/
-    └── featcache/          # 核心库
-        ├── types.go        # 公共类型、常量
-        ├── hash.go         # 哈希函数
-        ├── segment.go      # 共享内存段管理（平台无关接口）
-        ├── segment_linux.go # Linux mmap 实现
-        ├── segment_other.go # 非 Linux 桩
-        ├── hashtable.go    # 开放寻址哈希表
-        ├── loader.go       # 批量加载器（写入者）
-        ├── reader.go       # 零拷贝读取者
-        ├── datasource.go   # 数据源接口
-        ├── protocol.go     # UDS 控制面协议
-        ├── featcache_test.go # 测试
-        └── example_test.go   # 示例
+│   └── featload/           # Loader daemon entry point
+├── pkg/
+│   └── featcache/          # Core library
+│       ├── types.go        # Header, HashSlot, constants, OpCodes
+│       ├── hash.go         # HashKey (hash/maphash)
+│       ├── segment.go      # Segment API (platform-independent)
+│       ├── segment_linux.go# Linux mmap implementation
+│       ├── segment_other.go# Non-Linux stubs
+│       ├── hashtable.go    # Open-addressed hash table
+│       ├── loader.go       # Loader (write side)
+│       ├── reader.go       # Reader (zero-copy read side)
+│       ├── server.go       # UDS control-plane server
+│       ├── datasource.go   # DataSource interface + built-ins
+│       ├── protocol.go     # UDS binary protocol codec
+│       └── *_test.go       # Tests
+├── examples/
+│   └── featload-demo/      # End-to-end demo
+└── docs/                   # Architecture + design docs
 ```
 
 ---
 
-## 配置参数
+## Development
 
-### featload（Loader 守护进程）
+### Requirements
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `-name` | `featcache` | 共享内存段名称 |
-| `-size` | `2GB` | 共享内存大小 |
-| `-uds` | `\x00featcache` | UDS 地址（抽象命名空间） |
-| `-source` | 必填 | 数据源路径 |
+- Go 1.25+
+- Linux (core functionality) / macOS (testing, development)
 
----
-
-## 开发
+### Common commands
 
 ```bash
-# 运行测试
+# Build
+make build
+
+# Test (with race detector)
+make test
+
+# Coverage
+make coverage
+
+# Lint
+make lint
+
+# Everything (fmt, vet, lint, test, coverage, license)
+make check
+```
+
+Or use Go directly:
+
+```bash
+# Run tests
 go test ./pkg/featcache/ -v -count=1
 
-# 带竞态检测
+# Race detector
 go test ./pkg/featcache/ -v -race -count=1
 
-# 基准测试
+# Benchmarks
 go test ./pkg/featcache/ -bench=. -benchmem -count=1
 
-# 构建
-go build ./cmd/featload
+# Coverage
+go test ./pkg/featcache/ -coverprofile=coverage.out -covermode=atomic -count=1
+go tool cover -func=coverage.out
 ```
+
+### Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow, code standards, and commit requirements.
+
+### Using AI coding assistants?
+
+See [AI_CONTRIBUTING.md](AI_CONTRIBUTING.md) for AI-assisted contribution rules and disclosure requirements.
+
+---
+
+## Performance
+
+| Metric | Target | Notes |
+|--------|--------|-------|
+| Inference process startup | < 100 ms | Independent of data size (mmap + one metadata lookup) |
+| Single lookup | < 100 ns | 1–2 atomic reads + hash comparison, no syscalls |
+| Batch lookup | N × single | Linear scaling, no extra overhead |
+| Memory efficiency | ~1.002 × data size | Compact storage, minimal index overhead |
+| Multi-process memory savings | (N−1) × data size | N processes share one copy |
+
+---
+
+## Comparison
+
+| Solution | Zero-copy multi-proc sharing | Lookup latency | Hot update | 10GB+ optimized | External deps |
+|----------|------------------------------|----------------|------------|-----------------|---------------|
+| **featcache** | ✅ | < 100 ns | ✅ (Phase 2) | ✅ | None |
+| Redis | ❌ network | ~100 µs | ✅ | ❌ | None |
+| FAISS | ⚠️ mmap sharing | < 100 ns | ❌ | ✅ | C++ |
+| Plasma (deprecated) | ✅ | < 100 ns | ❌ | ❌ | C++ |
+| Safetensors | ❌ per-process mmap | < 100 ns | ❌ | ✅ | Python/C++ |
+
+---
+
+## Roadmap
+
+- [ ] **Phase 1 (current)**: core — Segment, HashTable, Loader, Reader, UDS control plane, DataSource abstraction
+- [ ] **Phase 2**: hot swap — double-buffered version switching, `WATCH_VERSION`, incremental updates
+- [ ] **Phase 3**: enhancements — multi-tier storage, persistence, metrics
+
+See [docs/design/roadmap.md](docs/design/roadmap.md).
+
+---
+
+## Security
+
+Found a security issue? Read [SECURITY.md](SECURITY.md) and **do not** disclose it publicly (GitHub Issues, discussions, etc.).
+
+---
+
+## Code of Conduct
+
+By participating in this project, you agree to the [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ---
 
 ## License
 
-MIT
+[Apache License 2.0](LICENSE)

@@ -1,0 +1,35 @@
+# .dockerignore — exclude local development artifacts from Docker builds
+
+# VCS
+.git
+.gitignore
+
+# Build artifacts
+bin/
+dist/
+coverage.out
+coverage.html
+*.test
+*.prof
+
+# CI artifacts
+golangci-lint-report.json
+golangci-lint.sarif
+
+# Docs and governance (not needed in the runtime image)
+docs/
+.github/
+.ai/
+.devcontainer/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Local tools
+install_skills.sh
+sync_skills.sh

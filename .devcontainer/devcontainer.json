@@ -1,0 +1,38 @@
+{
+  "name": "featcache (Go)",
+  "image": "mcr.microsoft.com/devcontainers/go:1.25",
+
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.25"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "go.useLanguageServer": true,
+        "go.lintTool": "golangci-lint",
+        "go.lintFlags": ["run"],
+        "go.coverOnSave": true,
+        "go.coverOnSingleTest": true,
+        "editor.formatOnSave": true,
+        "go.formatTool": "gofmt",
+        "gopls": {
+          "ui.completion.usePlaceholders": true
+        }
+      },
+      "extensions": [
+        "golang.go",
+        "eamodio.gitlens",
+        "github.vscode-github-actions",
+        "ms-azuretools.vscode-docker",
+        "streetsidesoftware.code-spell-checker"
+      ]
+    }
+  },
+
+  "postCreateCommand": "make install-tools",
+
+  "remoteUser": "vscode"
+}

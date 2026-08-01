@@ -1,3 +1,17 @@
+// Copyright 2026 featcache contributors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package featcache
 
 import (
@@ -43,7 +57,7 @@ func NewCacheServer(segmentName string, segmentSize int, udsAddr string) (*Cache
 
 // Listen starts the UDS listener and serves control-plane requests.
 func (s *CacheServer) Listen() error {
-	if len(s.udsAddr) > 0 && s.udsAddr[0] == '/' {
+	if s.udsAddr != "" && s.udsAddr[0] == '/' {
 		os.Remove(s.udsAddr)
 	}
 
@@ -52,8 +66,8 @@ func (s *CacheServer) Listen() error {
 	if err != nil {
 		return err
 	}
-	if len(s.udsAddr) > 0 && s.udsAddr[0] == '/' {
-		_ = os.Chmod(s.udsAddr, 0777)
+	if s.udsAddr != "" && s.udsAddr[0] == '/' {
+		_ = os.Chmod(s.udsAddr, 0o777)
 	}
 	s.ln = ln
 

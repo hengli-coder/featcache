@@ -1,3 +1,17 @@
+// Copyright 2026 featcache contributors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package featcache
 
 import (
@@ -11,14 +25,51 @@ import (
 // ErrEOF signals that the data source is exhausted.
 var ErrEOF = errors.New("featcache: end of data source")
 
+// --- MapDataSource ---
+
+// MapDataSource reads key-value pairs from an in-memory map.
+// Useful for tests, demos, and embedding small datasets at runtime.
+type MapDataSource struct {
+	entries map[string][]byte
+	keys    []string
+	idx     int
+}
+
+// NewMapDataSource creates a MapDataSource from a map.
+func NewMapDataSource(entries map[string][]byte) *MapDataSource {
+	keys := make([]string, 0, len(entries))
+	for k := range entries {
+		keys = append(keys, k)
+	}
+	return &MapDataSource{entries: entries, keys: keys}
+}
+
+// Open returns the total number of entries.
+func (ds *MapDataSource) Open() (int, error) {
+	return len(ds.entries), nil
+}
+
+// Next reads the next key-value pair.
+func (ds *MapDataSource) Next() (key []byte, value []byte, err error) {
+	if ds.idx >= len(ds.keys) {
+		return nil, nil, ErrEOF
+	}
+	k := ds.keys[ds.idx]
+	ds.idx++
+	return []byte(k), ds.entries[k], nil
+}
+
+// Close is a no-op for an in-memory data source.
+func (ds *MapDataSource) Close() error { return nil }
+
 // DataSource defines the interface for loading key-value pairs into the cache.
 // Implementations should return ErrEOF when all data has been read.
 //
 // Typical usage:
 //
-//	ds, _ := NewFileDataSource("/path/to/data")
-//	total, _ := ds.Open()
-//	loader.Load(ds, total)
+//	ds := NewFileDataSource("/path/to/data")
+//	loader.Init(1000) // pre-size the hash table from an entry estimate
+//	loader.Load(ds)   // Load calls ds.Open() internally
 //	ds.Close()
 type DataSource interface {
 	// Open prepares the data source and returns the total number of entries
@@ -73,7 +124,7 @@ func (ds *FileDataSource) Open() (int, error) {
 }
 
 // Next reads the next key-value pair.
-func (ds *FileDataSource) Next() ([]byte, []byte, error) {
+func (ds *FileDataSource) Next() (key []byte, value []byte, err error) {
 	// Read keyLen
 	var keyLen uint32
 	if err := binary.Read(ds.br, binary.LittleEndian, &keyLen); err != nil {
@@ -84,7 +135,7 @@ func (ds *FileDataSource) Next() ([]byte, []byte, error) {
 	}
 
 	// Read key
-	key := make([]byte, keyLen)
+	key = make([]byte, keyLen)
 	if _, err := io.ReadFull(ds.br, key); err != nil {
 		return nil, nil, err
 	}
@@ -143,7 +194,7 @@ func (ds *LineDataSource) Open() (int, error) {
 }
 
 // Next reads the next key-value pair (tab-separated line).
-func (ds *LineDataSource) Next() ([]byte, []byte, error) {
+func (ds *LineDataSource) Next() (key []byte, value []byte, err error) {
 	if !ds.sc.Scan() {
 		if err := ds.sc.Err(); err != nil {
 			return nil, nil, err
@@ -153,18 +204,19 @@ func (ds *LineDataSource) Next() ([]byte, []byte, error) {
 	line := ds.sc.Bytes()
 	ds.n++
 
-	// Split on first tab
+	// Split on first tab.
 	for i, b := range line {
-		if b == '\t' {
-			key := make([]byte, i)
-			copy(key, line[:i])
-			val := make([]byte, len(line)-i-1)
-			copy(val, line[i+1:])
-			return key, val, nil
+		if b != '\t' {
+			continue
 		}
+		key = make([]byte, i)
+		copy(key, line[:i])
+		value = make([]byte, len(line)-i-1)
+		copy(value, line[i+1:])
+		return key, value, nil
 	}
-	// No tab found — key is the whole line, value is empty
-	key := make([]byte, len(line))
+	// No tab found — key is the whole line, value is empty.
+	key = make([]byte, len(line))
 	copy(key, line)
 	return key, nil, nil
 }

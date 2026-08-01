@@ -1,3 +1,17 @@
+// Copyright 2026 featcache contributors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // Package featcache implements a zero-copy runtime data cache for AI inference.
 //
 // Architecture: single-writer (Loader) + multiple-reader (inference processes).
@@ -19,7 +33,7 @@ const (
 	HeaderSize = 64
 
 	// SlotSize is the size of each hash table slot (24 bytes).
-	// Layout: [hash:8B][offset:4B][vlen:4B][status:4B][pad:4B]
+	// Layout: [hash:8B][offset:4B][vlen:4B][status:4B][pad:4B].
 	SlotSize = 24
 
 	// SegmentDefaultSize is the default segment size (2 GB).

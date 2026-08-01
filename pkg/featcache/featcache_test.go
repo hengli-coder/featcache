@@ -224,7 +224,7 @@ func TestProtocol_EncodeDecodeRequest(t *testing.T) {
 	if decoded.Op != req.Op {
 		t.Fatalf("Op = %d, want %d", decoded.Op, req.Op)
 	}
-	if string(decoded.Key) != string(req.Key) {
+	if !bytes.Equal(decoded.Key, req.Key) {
 		t.Fatalf("Key = %q, want %q", decoded.Key, req.Key)
 	}
 }
@@ -381,7 +381,7 @@ func (ds *mapDataSource) Open() (int, error) {
 	return len(ds.entries), nil
 }
 
-func (ds *mapDataSource) Next() ([]byte, []byte, error) {
+func (ds *mapDataSource) Next() (key []byte, value []byte, err error) {
 	if ds.idx >= len(ds.keys) {
 		return nil, nil, ErrEOF
 	}

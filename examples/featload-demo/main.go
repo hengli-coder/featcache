@@ -1,81 +1,87 @@
-//go:build ignore
+//go:build linux
 
+// Copyright 2026 featcache contributors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Command featload-demo demonstrates the featcache zero-copy workflow:
+// a Loader writes data into a shared memory segment, then a Reader reads it
+// back directly from shared memory.
 package main
 
 import (
 	"fmt"
 	"log"
-	"time"
 
 	featcache "github.com/hengli-coder/featcache/pkg/featcache"
 )
 
 func main() {
-	const segmentName = "featcache-demo"
-	const udsAddr = "\x00featcache-demo"
-	const segmentSize = 64 * 1024 * 1024 // 64 MB
+	const (
+		segmentName = "featcache-demo"
+		segmentSize = 64 * 1024 * 1024 // 64 MB
+	)
 
-	// ─── Start Server ────────────────────────────────────────────────
-	server, err := featcache.NewCacheServer(segmentName, segmentSize, udsAddr)
+	// ─── Loader side (normally the featload daemon) ───────────────────
+	loader, err := featcache.NewLoader(featcache.LoaderConfig{
+		SegmentName: segmentName,
+		SegmentSize: segmentSize,
+	})
 	if err != nil {
-		log.Fatalf("Failed to create server: %v", err)
+		log.Fatalf("create loader: %v", err)
 	}
-	defer server.Close()
+	defer loader.Destroy()
 
-	go func() {
-		log.Println("Server listening...")
-		if err := server.Listen(); err != nil {
-			log.Fatalf("Server error: %v", err)
-		}
-	}()
-
-	// Give server a moment to start listening.
-	time.Sleep(100 * time.Millisecond)
-
-	// ─── Connect Client ──────────────────────────────────────────────
-	client := featcache.NewCacheClient(udsAddr)
-	if err := client.Connect(segmentName); err != nil {
-		log.Fatalf("Failed to connect: %v", err)
+	if err := loader.Init(2); err != nil {
+		log.Fatalf("init loader: %v", err)
 	}
-	defer client.Close()
 
-	// ─── SET ─────────────────────────────────────────────────────────
-	if err := client.Set([]byte("model:embedding/v1"), []byte("large_embedding_data_here"), 0); err != nil {
-		log.Fatalf("Set failed: %v", err)
-	}
-	fmt.Println("✓ SET model:embedding/v1")
-
-	// ─── GET ─────────────────────────────────────────────────────────
-	val, ok, err := client.Get([]byte("model:embedding/v1"))
+	entries := featcache.NewMapDataSource(map[string][]byte{
+		"user:123:emb":    []byte("embedding_data_123"),
+		"tokenizer:vocab": []byte("vocab_data"),
+		"item:456:emb":    []byte("embedding_data_456"),
+		"feature:dict":    []byte("sparse_feature_dictionary"),
+	})
+	count, err := loader.Load(entries)
 	if err != nil {
-		log.Fatalf("Get failed: %v", err)
+		log.Fatalf("load: %v", err)
 	}
+	fmt.Printf("✓ loaded %d entries into segment %q\n", count, segmentName)
+
+	// ─── Reader side (normally an inference process) ──────────────────
+	// NewReaderFromSegment is used here for a single-process demo.
+	// In production, inference processes call featcache.NewReader(name, udsAddr)
+	// to discover and mmap the shared segment.
+	reader, err := featcache.NewReaderFromSegment(loader.Segment())
+	if err != nil {
+		log.Fatalf("create reader: %v", err)
+	}
+	defer reader.Close()
+
+	// ─── Zero-copy lookups ────────────────────────────────────────────
+	val, ok := reader.Get([]byte("user:123:emb"))
 	if !ok {
-		log.Fatal("Key not found")
+		log.Fatal("key not found")
 	}
-	fmt.Printf("✓ GET model:embedding/v1 → %s (len=%d)\n", val, len(val))
+	fmt.Printf("✓ GET user:123:emb → %q (len=%d)\n", val, len(val))
 
-	// ─── GET with TTL ────────────────────────────────────────────────
-	if err := client.Set([]byte("temp:session"), []byte("abc123"), 300); err != nil {
-		log.Fatalf("Set with TTL failed: %v", err)
-	}
-	fmt.Println("✓ SET temp:session (TTL=300s)")
-
-	// ─── DELETE ──────────────────────────────────────────────────────
-	deleted, err := client.Delete([]byte("temp:session"))
-	if err != nil {
-		log.Fatalf("Delete failed: %v", err)
-	}
-	fmt.Printf("✓ DELETE temp:session → deleted=%v\n", deleted)
-
-	// ─── Verify deletion ─────────────────────────────────────────────
-	_, ok, err = client.Get([]byte("temp:session"))
-	if err != nil {
-		log.Fatalf("Get after delete failed: %v", err)
-	}
-	if !ok {
-		fmt.Println("✓ temp:session confirmed deleted")
-	}
+	// Batch lookup
+	values, results := reader.GetBatch([][]byte{
+		[]byte("tokenizer:vocab"),
+		[]byte("missing:key"),
+	})
+	fmt.Printf("✓ batch: found=%v value=%q\n", results[0], values[0])
+	fmt.Printf("✓ batch: found=%v (expected miss)\n", results[1])
 
 	fmt.Println("\nDone! All operations completed successfully.")
 }

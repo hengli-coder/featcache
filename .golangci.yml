@@ -53,12 +53,14 @@ linters:
     - unused       # unused code (functions, variables, types)
     - nilerr       # returning nil where error expected
     - bodyclose    # HTTP response body closure
+    - usestdlibvars # prefer stdlib constants over magic literals
 
     # ── Security (P0) ────────────────────────────────────────────
     - gosec        # security-related checks
 
     # ── Concurrency & Resource Safety (P0/P1) ────────────────────
     - copyloopvar  # loop variable capture in closures
+    - nosprintfhostport # host:port formatting without net.JoinHostPort
 
     # ── Maintainability & Code Quality (P2) ──────────────────────
     - revive       # comprehensive code style checker
