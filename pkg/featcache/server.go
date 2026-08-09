@@ -21,6 +21,16 @@ import (
 	"sync/atomic"
 )
 
+// ServerState enumerates the loader lifecycle states, surfaced via GET_STATUS.
+type ServerState int32
+
+const (
+	StateIdle     ServerState = iota // 0 — before loading
+	StateLoading                     // 1 — loading data
+	StateReady                       // 2 — data ready, readers may use it
+	StateUpdating                    // 3 — reloading (Phase 2)
+)
+
 // CacheServer is the UDS control-plane server for featcache.
 // It serves metadata requests from Reader processes over a Unix Domain Socket.
 // The actual data is stored in shared memory and read directly by Readers.
@@ -33,6 +43,9 @@ type CacheServer struct {
 
 	ln     net.Listener
 	closed atomic.Bool
+
+	// state is the current loader state, served via GET_STATUS.
+	state atomic.Int32
 }
 
 // NewCacheServer creates a CacheServer that manages a shared memory segment
@@ -53,6 +66,33 @@ func NewCacheServer(segmentName string, segmentSize int, udsAddr string) (*Cache
 		seg:         seg,
 	}
 	return s, nil
+}
+
+// NewServer creates a CacheServer over an already-open segment.
+// Used by tests and by the loader daemon when it owns the segment and wants
+// to expose it over UDS without re-opening it.
+func NewServer(seg *Segment, udsAddr string) *CacheServer {
+	return &CacheServer{
+		segmentName: seg.Name(),
+		segmentSize: seg.Cap(),
+		udsAddr:     udsAddr,
+		seg:         seg,
+	}
+}
+
+// SetState updates the loader state.
+func (s *CacheServer) SetState(state ServerState) {
+	s.state.Store(int32(state))
+}
+
+// State returns the current loader state.
+func (s *CacheServer) State() ServerState {
+	return ServerState(s.state.Load())
+}
+
+// Segment returns the underlying shared memory segment.
+func (s *CacheServer) Segment() *Segment {
+	return s.seg
 }
 
 // Listen starts the UDS listener and serves control-plane requests.
