@@ -16,6 +16,13 @@ import (
 func buildHelperCommand(args []string) *exec.Cmd {
 	cmd := exec.Command(os.Args[0], args...)
 	cmd.Env = os.Environ()
+	// The child re-exec runs `go test -run TestE2EChildReader`. The default
+	// `-test.testlogfile`/`-test.paniconexit0` flags make failures surface as a
+	// non-zero exit; capturing stderr lets the parent report why it failed.
+	if testing.Verbose() {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
 	return cmd
 }
 
