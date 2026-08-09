@@ -72,6 +72,10 @@ func NewCacheServer(segmentName string, segmentSize int, udsAddr string) (*Cache
 // Used by tests and by the loader daemon when it owns the segment and wants
 // to expose it over UDS without re-opening it.
 func NewServer(seg *Segment, udsAddr string) *CacheServer {
+	// The server shares ownership of the segment (we map the same memory, not
+	// a new mapping), so Destroy must not unlink a backing file the caller may
+	// not have. Mark it as not file-backed so Destroy is a no-op for the file.
+	seg.backedByFile = false
 	return &CacheServer{
 		segmentName: seg.Name(),
 		segmentSize: seg.Cap(),

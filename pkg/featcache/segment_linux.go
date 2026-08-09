@@ -17,6 +17,7 @@
 package featcache
 
 import (
+	"errors"
 	"os"
 
 	"golang.org/x/sys/unix"
@@ -46,10 +47,11 @@ func createSegment(name string, size int) (*Segment, error) {
 	}
 
 	return &Segment{
-		name:   name,
-		data:   data,
-		cap:    size,
-		mapped: true,
+		name:         name,
+		data:         data,
+		cap:          size,
+		mapped:       true,
+		backedByFile: true,
 	}, nil
 }
 
@@ -73,10 +75,11 @@ func openSegment(name string) (*Segment, error) {
 	}
 
 	return &Segment{
-		name:   name,
-		data:   data,
-		cap:    size,
-		mapped: true,
+		name:         name,
+		data:         data,
+		cap:          size,
+		mapped:       true,
+		backedByFile: true,
 	}, nil
 }
 
@@ -98,6 +101,16 @@ func (s *Segment) close() error {
 }
 
 func (s *Segment) destroy() error {
-	_ = s.close()
-	return os.Remove(devShmPath(s.name))
+	err := s.close()
+	if !s.backedByFile {
+		// In-memory test segments have no backing file to unlink.
+		return err
+	}
+	rmErr := os.Remove(devShmPath(s.name))
+	if os.IsNotExist(rmErr) {
+		// The backing file may already be gone (e.g. created with O_EXCL and
+		// removed); treat absence as a successful destroy.
+		rmErr = nil
+	}
+	return errors.Join(err, rmErr)
 }

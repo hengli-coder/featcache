@@ -32,6 +32,11 @@ type Segment struct {
 	// mapped reports whether data was obtained from unix.Mmap (Linux) and
 	// must be unmapped on close. In-memory test segments skip munmap.
 	mapped bool
+
+	// backedByFile reports whether this segment owns a backing file that must
+	// be unlinked on destroy. Linux segments (Create/Open) are true; in-memory
+	// test segments are false.
+	backedByFile bool
 }
 
 // CreateSegment creates a new shared memory segment with the given name and size.
