@@ -114,6 +114,13 @@ func (l *Loader) Init(expectedEntries int) error {
 	hdr.DataOffset = dataOffset
 	hdr.DataEnd = dataOffset // data region starts empty
 	hdr.SegmentID = 0
+	hdr.Flags = 0
+
+	// Persist a fresh cross-process hash seed so every reader (including other
+	// processes) hashes keys identically. Without this, the loader's slot
+	// placement and a reader's lookup would diverge whenever maphash generates
+	// a different seed in the two processes.
+	setHeaderHashSeed(hdr)
 
 	// Initialize hash table (zero all slots)
 	InitHashTable(l.segment.Data(), hashOffset, int(hashCap))
@@ -193,8 +200,9 @@ func (l *Loader) put(key, value []byte) error {
 	copy(data[absOff+4:], key)
 	copy(data[absOff+4+len(key):], value)
 
-	// Insert into hash table
-	h := HashKey(key)
+	// Insert into hash table, hashing with the header-persisted seed so a
+	// reader in another process probes the same slot indices.
+	h := HashKeyWithSeed(key, headerHashSeed(l.segment.Header()))
 	relOffset := uint32(absOff) - l.segment.Header().DataOffset
 	if !l.hashTable.Insert(h, key, relOffset, uint32(len(value))) {
 		return errHashFull

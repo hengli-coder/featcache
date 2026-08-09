@@ -16,6 +16,8 @@ package featcache
 
 import (
 	"errors"
+	"fmt"
+	"hash/maphash"
 	"net"
 	"sync"
 	"time"
@@ -31,6 +33,10 @@ type Reader struct {
 	segment   *Segment
 	hashTable *HashTable
 
+	// seed is the hash seed recovered from the segment header. Lookups use it
+	// (via HashKeyWithSeed) so hashing matches the loader across processes.
+	seed maphash.Seed
+
 	// Control plane (UDS) — used only during initialization
 	mu     sync.Mutex
 	conn   net.Conn
@@ -40,16 +46,24 @@ type Reader struct {
 // NewReader opens an existing segment and connects to the loader via UDS
 // to obtain the segment layout. After initialization, all queries go
 // directly through shared memory.
+//
+// segmentName is the shared memory segment name to map; udsAddr is the
+// loader's control-plane socket. Either may be empty:
+//   - If udsAddr is non-empty, the reader dials the loader, sends GET_INFO,
+//     and uses the returned metadata to locate the segment. When segmentName
+//     is also given it is validated against the loader's reported name;
+//     when empty, the loader-reported name is used.
+//   - If udsAddr is empty, the reader opens segmentName directly (assumes
+//     the layout is already known).
 func NewReader(segmentName string, udsAddr string) (*Reader, error) {
 	r := &Reader{}
 
-	// Connect to loader and get segment metadata
 	if udsAddr != "" {
 		if err := r.connect(udsAddr, segmentName); err != nil {
 			return nil, err
 		}
 	} else {
-		// No UDS — open segment directly (assumes layout is known)
+		// No UDS — open segment directly (assumes layout is known).
 		seg, err := OpenSegment(segmentName)
 		if err != nil {
 			return nil, err
@@ -59,6 +73,15 @@ func NewReader(segmentName string, udsAddr string) (*Reader, error) {
 	}
 
 	return r, nil
+}
+
+// NewReaderViaUDS connects to the loader at udsAddr, asks it for the segment
+// metadata, then opens and maps the reported shared memory segment. This is
+// the convenience entry point for inference processes that only know the
+// loader's control-plane address (e.g. "\x00featcache") and not the segment
+// name in advance.
+func NewReaderViaUDS(udsAddr string) (*Reader, error) {
+	return NewReader("", udsAddr)
 }
 
 // NewReaderFromSegment creates a Reader from an already-opened Segment.
@@ -79,22 +102,58 @@ func (r *Reader) initHashTable() {
 		int(hdr.DataOffset),
 		int(hdr.HashCap),
 	)
+	// Use the header-persisted seed for lookups: it must match the seed the
+	// loader used when inserting, otherwise every probe derives a different
+	// slot index and reads miss. headerHashSeed falls back to the process seed
+	// for segments that predate seed persistence.
+	r.seed = headerHashSeed(hdr)
 }
 
-func (r *Reader) connect(udsAddr, segmentName string) error {
+// connect dials the loader over UDS, requests GET_INFO, and maps the segment.
+// If wantName is non-empty it must match the loader-reported segment name.
+func (r *Reader) connect(udsAddr, wantName string) error {
 	conn, err := net.DialTimeout("unix", udsAddr, 5*time.Second)
 	if err != nil {
 		return err
 	}
-	r.conn = conn
 
-	// TODO: Send GET_INFO request and receive segment metadata
-	// For now, just open the segment directly
-	seg, err := OpenSegment(segmentName)
+	// Ask the loader for the segment metadata.
+	if err := EncodeRequest(conn, &Request{Op: OpGetInfo}); err != nil {
+		conn.Close()
+		return err
+	}
+	resp, err := DecodeResponse(conn)
 	if err != nil {
 		conn.Close()
 		return err
 	}
+	if resp.Status != RespOK {
+		conn.Close()
+		return fmt.Errorf("featcache: loader returned status %d", resp.Status)
+	}
+
+	// Validate the caller-provided segment name, if any.
+	if wantName != "" && resp.SegmentName != "" && wantName != resp.SegmentName {
+		conn.Close()
+		return fmt.Errorf("featcache: segment name mismatch: want %q, loader has %q", wantName, resp.SegmentName)
+	}
+	segName := resp.SegmentName
+	if segName == "" {
+		segName = wantName
+	}
+	if segName == "" {
+		conn.Close()
+		return errors.New("featcache: loader reported an empty segment name")
+	}
+
+	// Open the shared memory segment by the discovered name.
+	seg, err := OpenSegment(segName)
+	if err != nil {
+		conn.Close()
+		return err
+	}
+
+	r.conn = conn
 	r.segment = seg
 	r.initHashTable()
 	return nil
@@ -106,8 +165,7 @@ func (r *Reader) connect(udsAddr, segmentName string) error {
 //
 // Returns (value, true) on hit, (nil, false) on miss.
 func (r *Reader) Get(key []byte) ([]byte, bool) {
-	h := HashKey(key)
-	return r.hashTable.Get(h, key)
+	return r.hashTable.Get(HashKeyWithSeed(key, r.seed), key)
 }
 
 // GetBatch looks up multiple keys. Returns values and existence flags in the same order.

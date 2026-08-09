@@ -16,11 +16,28 @@
 
 package featcache
 
+// testSegments is a platform-independent registry enabling tests to share
+// in-memory segments by name across the UDS boundary, mirroring what real
+// /dev/shm provides on Linux. It is only exercised by tests.
+var testSegments = map[string]*Segment{}
+
+// registerTestSegment makes an in-memory segment openable by name, so a
+// Reader (or Loader) can re-open it by name the same way it would shm_open
+// on Linux.
+func registerTestSegment(name string, seg *Segment) {
+	if name != "" {
+		testSegments[name] = seg
+	}
+}
+
 func createSegment(_ string, _ int) (*Segment, error) {
 	return nil, ErrNotSupported
 }
 
-func openSegment(_ string) (*Segment, error) {
+func openSegment(name string) (*Segment, error) {
+	if s, ok := testSegments[name]; ok {
+		return &Segment{name: s.name, data: s.data, cap: s.cap, mapped: s.mapped}, nil
+	}
 	return nil, ErrNotSupported
 }
 
@@ -36,5 +53,6 @@ func (s *Segment) close() error {
 
 func (s *Segment) destroy() error {
 	_ = s.close()
+	delete(testSegments, s.name)
 	return nil
 }
