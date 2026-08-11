@@ -17,11 +17,11 @@ featcache's feature evolution roadmap, organized by phase. Each phase delivers a
 | DataSource abstraction + built-ins (file / line / map) | ✅ |
 | Tests + benchmarks | ✅ |
 
-**To fix**:
+**Fixed**:
 
-- [ ] Cross-process hash seed consistency (see [ADR-6](ADRs.md#adr-6-why-hashmaphash-for-hashing)) — share the seed via the Header
-- [ ] `Reader.connect` should actually send GET_INFO (currently opens the segment directly)
-- [ ] `featload` daemon should accept a `-source` data source flag (currently only creates an empty segment)
+- [x] Cross-process hash seed consistency (see [ADR-6](ADRs.md#adr-6-why-hashmaphash-for-hashing)) — seed persisted in the Header, hashed with FNV-1a instead of `hash/maphash`
+- [x] `Reader.connect` sends GET_INFO and validates the loader-reported segment name
+- [x] `featload` daemon accepts a `-source` data source flag
 
 ## Phase 2: Hot swap
 
