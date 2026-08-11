@@ -1,5 +1,5 @@
 # Linter Governance Configuration
-# https://github.com/hengli-coder/shm-go
+# https://github.com/hengli-coder/featcache
 version: 1
 
 # Severity policy for lint findings.
