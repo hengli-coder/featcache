@@ -86,13 +86,17 @@ go get github.com/hengli-coder/featcache
 
 ### 1. 启动守护进程
 
-`featload` 守护进程创建共享内存段并服务 UDS 控制面。数据加载通过 `Loader` API 完成（`-source` CLI 参数在规划中，见 [roadmap](docs/design/roadmap.md)）。
+`featload` 守护进程创建共享内存段、从 `-source` 指定的文件加载数据，并服务 UDS 控制面。`-source` 接受 `key<TAB>value` 制表符分隔的文本行（对应 `NewLineDataSource`，见[内置数据源](#内置数据源)）；其他格式可以直接用 `Loader` API 加载（见下文）。
 
 ```bash
 # 构建
 go build ./cmd/featload
 
-# 启动守护进程（段名 "my-embeddings"，默认 2GB）
+# 启动守护进程并从文件加载数据（段名 "my-embeddings"，10GB）
+featload -name my-embeddings -size 10737418240 -source /data/embeddings.tsv
+
+# 不带 -source 启动一个空段——在其他方式通过 Loader API 写入数据之前，
+# 只对外提供元数据服务
 featload -name my-embeddings -size 10737418240
 
 # 参数示例
@@ -160,6 +164,7 @@ go run ./examples/featload-demo
 |------|--------|------|
 | `-name` | `featcache` | 共享内存段名称 |
 | `-size` | `2GB` | 段大小（字节） |
+| `-source` | *(空)* | 数据源文件路径（`key<TAB>value` 制表符分隔文本行）。为空则创建一个空段，只对外提供元数据服务 |
 | `-uds` | `\x00featcache` | UDS 地址（`\x00` 前缀 = 抽象命名空间） |
 | `-version` | `false` | 打印版本信息并退出 |
 

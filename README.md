@@ -86,13 +86,17 @@ go get github.com/hengli-coder/featcache
 
 ### 1. Load data and start the daemon
 
-The `featload` daemon creates a shared memory segment and serves the UDS control plane. Data loading is done through the `Loader` API (below) — a `-source` CLI flag is planned (see [roadmap](docs/design/roadmap.md)).
+The `featload` daemon creates a shared memory segment, loads data from a `-source` file, and serves the UDS control plane. `-source` expects tab-separated `key<TAB>value` lines (`NewLineDataSource` — see [Built-in data sources](#built-in-data-sources)); for other formats, load through the `Loader` API directly (below).
 
 ```bash
 # Build
 go build ./cmd/featload
 
-# Start the daemon (segment "my-embeddings", 2 GB by default)
+# Start the daemon and load data from a file (segment "my-embeddings", 10 GB)
+featload -name my-embeddings -size 10737418240 -source /data/embeddings.tsv
+
+# Start with an empty segment (no -source) — only metadata is served until
+# something else populates it via the Loader API
 featload -name my-embeddings -size 10737418240
 
 # Options
@@ -160,6 +164,7 @@ The demo loads a small dataset via `MapDataSource`, then reads it back zero-copy
 |------|---------|-------------|
 | `-name` | `featcache` | Shared memory segment name |
 | `-size` | `2GB` | Segment size in bytes |
+| `-source` | *(empty)* | Path to a data source file (tab-separated `key<TAB>value` lines). If empty, the segment is created empty and only metadata is served |
 | `-uds` | `\x00featcache` | UDS address (`\x00` prefix = abstract namespace) |
 | `-version` | `false` | Print version info and exit |
 
