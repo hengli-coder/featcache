@@ -16,74 +16,84 @@ package featcache
 
 import (
 	"encoding/binary"
-	"unsafe"
-
-	"hash/maphash"
+	"math/rand/v2"
 )
 
-// seedSlot is where the maphash.Seed word is persisted in the header Reserved
-// bytes. maphash.Seed wraps a single uint64 (Seed.s), so 8 bytes suffice.
+// seedSlot is where the 64-bit hash seed is persisted in the header Reserved
+// bytes (8 bytes suffice for a uint64).
+const seedSlot = 0 // Reserved[0:8] — where the hash seed is persisted
+
+// fnvOffset64 and fnvPrime64 are the standard FNV-1a constants.
 const (
-	seedSlot = 0 // Reserved[0:8] — where the maphash.Seed word is persisted
+	fnvOffset64 = 14695981039346656037
+	fnvPrime64  = 1099511628211
 )
 
-// HashKey returns a 64-bit hash of key using the package-level seed. The seed
-// is the one written into the segment header by the loader at Init and shared
-// across processes (see setHeaderHashSeed / headerHashSeed); the same Seed
-// value makes loader and reader agree on slot placement.
+// HashKey returns a 64-bit hash of key using the package-level process seed.
+// It is only internally consistent within a single process; cross-process
+// consumers (loader/reader in different OS processes) must hash with the
+// seed persisted in the segment header instead — see HashKeyWithSeed,
+// headerHashSeed, and setHeaderHashSeed.
 func HashKey(key []byte) uint64 {
 	return HashKeyWithSeed(key, defaultSeed())
 }
 
-// HashKeyWithSeed returns a 64-bit hash of key using seed.
-func HashKeyWithSeed(key []byte, seed maphash.Seed) uint64 {
-	var h maphash.Hash
-	h.SetSeed(seed)
-	h.Write(key)
-	return h.Sum64()
+// HashKeyWithSeed returns a 64-bit FNV-1a hash of key, seeded with seed.
+//
+// Deliberately NOT hash/maphash: maphash.Seed mixes in a per-process random
+// AES key inside the runtime (see runtime.memhash), so two processes with
+// the *same* Seed value still compute different hashes — the seed alone does
+// not make maphash reproducible across processes. FNV-1a here is a plain,
+// portable byte-at-a-time hash with no hidden process-local state, so the
+// same (seed, key) always yields the same hash everywhere, which is required
+// for the loader (writer) and readers (other OS processes) to agree on slot
+// placement in the shared hash table.
+func HashKeyWithSeed(key []byte, seed uint64) uint64 {
+	h := uint64(fnvOffset64) ^ seed
+	for _, b := range key {
+		h ^= uint64(b)
+		h *= fnvPrime64
+	}
+	return h
 }
 
-// headerHashSeed recovers the maphash.Seed persisted in the header Reserved
+// headerHashSeed recovers the hash seed persisted in the header Reserved
 // bytes. If the header carries no seed yet (all-zero), a fresh process-local
-// seed is returned instead, matching the loader's own fallback so hashing stays
-// internally consistent before a seed is written.
-func headerHashSeed(hdr *Header) maphash.Seed {
-	var s maphash.Seed
-	cell := hdr.Reserved[seedSlot : seedSlot+8]
-	if binary.LittleEndian.Uint64(cell) == 0 {
+// seed is returned instead, matching the loader's own fallback so hashing
+// stays internally consistent before a seed is written.
+func headerHashSeed(hdr *Header) uint64 {
+	seed := binary.LittleEndian.Uint64(hdr.Reserved[seedSlot : seedSlot+8])
+	if seed == 0 {
 		return defaultSeed()
 	}
-	// Seed wraps one uint64; read it back verbatim.
-	setSeedWord(&s, binary.LittleEndian.Uint64(cell))
-	return s
+	return seed
 }
 
-// setHeaderHashSeed writes a fresh random maphash.Seed into the header Reserved
+// setHeaderHashSeed writes a fresh random hash seed into the header Reserved
 // bytes so all processes sharing the segment agree on key hashing. It returns
 // the seed it wrote so callers can hash consistently in the same turn.
-func setHeaderHashSeed(hdr *Header) maphash.Seed {
-	s := maphash.MakeSeed()
-	binary.LittleEndian.PutUint64(hdr.Reserved[seedSlot:seedSlot+8], seedWord(s))
-	return s
+func setHeaderHashSeed(hdr *Header) uint64 {
+	var seed uint64
+	for seed == 0 { // 0 is reserved to mean "no seed persisted yet"
+		seed = rand.Uint64()
+	}
+	binary.LittleEndian.PutUint64(hdr.Reserved[seedSlot:seedSlot+8], seed)
+	return seed
 }
 
-// seedWord exposes the single uint64 stored inside a maphash.Seed.
-func seedWord(s maphash.Seed) uint64 {
-	return *(*uint64)(unsafe.Pointer(&s))
-}
-
-// setSeedWord overwrites the uint64 stored inside a maphash.Seed.
-func setSeedWord(s *maphash.Seed, v uint64) {
-	*(*uint64)(unsafe.Pointer(s)) = v
-}
-
-// defaultSeed is the process-local seed used by the in-process HashKey API.
-// Within a single process it is stable (one MakeSeed per package load), so
-// a HashKey(insert) and HashKey(get) in the same binary agree. Cross-process
-// consumers must use the header-persisted seed (headerHashSeed) instead.
-var pkgSeed = maphash.MakeSeed()
+// pkgSeed is the process-local seed used by the in-process HashKey API.
+// Within a single process it is stable, so a HashKey(insert) and
+// HashKey(get) in the same binary agree. Cross-process consumers must use
+// the header-persisted seed (headerHashSeed) instead.
+var pkgSeed = func() uint64 {
+	var seed uint64
+	for seed == 0 {
+		seed = rand.Uint64()
+	}
+	return seed
+}()
 
 // defaultSeed returns the default process seed.
-func defaultSeed() maphash.Seed {
+func defaultSeed() uint64 {
 	return pkgSeed
 }

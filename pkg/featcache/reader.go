@@ -17,7 +17,6 @@ package featcache
 import (
 	"errors"
 	"fmt"
-	"hash/maphash"
 	"net"
 	"sync"
 	"time"
@@ -35,7 +34,7 @@ type Reader struct {
 
 	// seed is the hash seed recovered from the segment header. Lookups use it
 	// (via HashKeyWithSeed) so hashing matches the loader across processes.
-	seed maphash.Seed
+	seed uint64
 
 	// Control plane (UDS) — used only during initialization
 	mu     sync.Mutex
