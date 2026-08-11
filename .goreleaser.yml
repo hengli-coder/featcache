@@ -1,4 +1,6 @@
 # GoReleaser configuration
+version: 2
+
 project_name: featcache
 
 before:
@@ -20,7 +22,7 @@ builds:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
 
 archives:
-  - format: tar.gz
+  - formats: [tar.gz]
     name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
     files:
       - README.md
