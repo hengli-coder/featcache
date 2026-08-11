@@ -45,7 +45,7 @@
 
 AI 生成的代码必须：
 
-1. **遵循项目编码规范** — 见 [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)（gofmt、golangci-lint、命名、注释）
+1. **遵循项目编码规范** — 见 [CONTRIBUTING.zh-CN.md](.github/CONTRIBUTING.zh-CN.md)（gofmt、golangci-lint、命名、注释）
 2. **通过全部现有测试** — `go test ./...`
 3. **包含适当的测试** — 新功能必须附带单元测试
 4. **不降低测试覆盖率** — 总覆盖率 ≥ 70%

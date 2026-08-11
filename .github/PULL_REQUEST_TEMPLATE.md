@@ -70,9 +70,9 @@ bash scripts/check_coverage.sh coverage.out 70   # result: ✅
 - [ ] Coverage is not below the threshold (70%) and did not decrease
 - [ ] New/modified code has corresponding tests
 - [ ] Behavior changes are reflected in the docs
-- [ ] Commit messages follow [Conventional Commits](../../CONTRIBUTING.md#commit-messages)
+- [ ] Commit messages follow [Conventional Commits](CONTRIBUTING.md#commit-messages)
 
 ## AI-assisted contribution
 
 - [ ] No
-- [ ] Yes → disclose the tools and scope in the PR description (see [AI_CONTRIBUTING.md](../../AI_CONTRIBUTING.md))
+- [ ] Yes → disclose the tools and scope in the PR description (see [AI_CONTRIBUTING.md](../AI_CONTRIBUTING.md))

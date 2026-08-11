@@ -2,7 +2,7 @@
 
 Thanks for your interest in featcache! We welcome contributions of all kinds. Please read this guide before submitting.
 
-> **Using an AI coding assistant?** Please also read [AI_CONTRIBUTING.md](AI_CONTRIBUTING.md) — AI-assisted contributions are held to the same engineering standards as human-written code.
+> **Using an AI coding assistant?** Please also read [AI_CONTRIBUTING.md](../AI_CONTRIBUTING.md) — AI-assisted contributions are held to the same engineering standards as human-written code.
 
 ## Table of contents
 
@@ -20,9 +20,9 @@ Thanks for your interest in featcache! We welcome contributions of all kinds. Pl
 
 There are many ways to get involved:
 
-- **Report bugs**: open an issue using the [bug report template](.github/ISSUE_TEMPLATE/bug_report.md)
-- **Suggest features**: use the [feature request template](.github/ISSUE_TEMPLATE/feature_request.md)
-- **Propose designs**: use the [design proposal template](.github/ISSUE_TEMPLATE/design_proposal.md) and the [design template](docs/design/TEMPLATE.md)
+- **Report bugs**: open an issue using the [bug report template](ISSUE_TEMPLATE/bug_report.md)
+- **Suggest features**: use the [feature request template](ISSUE_TEMPLATE/feature_request.md)
+- **Propose designs**: use the [design proposal template](ISSUE_TEMPLATE/design_proposal.md) and the [design template](../docs/design/TEMPLATE.md)
 - **Submit code**: fork → branch → PR
 - **Improve documentation**: fix typos, add examples, clarify explanations
 
@@ -52,12 +52,20 @@ make check    # or run the steps individually
 ```bash
 make build      # compile
 make test       # tests (with race detector)
+make test-linux # tests inside a real Linux container (see note below)
 make coverage   # coverage
 make lint       # golangci-lint
 make vet        # go vet
 make check      # all quality gates
 make bench      # benchmarks
 ```
+
+> **On macOS/Windows:** `make test` only compiles the non-Linux stub segment
+> (`segment_other.go`) — it never exercises the real `/dev/shm` mmap path in
+> `e2e_linux_test.go` / `child_reader_linux_test.go`. If you touched anything
+> under `pkg/featcache/` that deals with shared memory, hashing, or the
+> loader/reader protocol, run `make test-linux` (requires a working `docker`)
+> before pushing — it runs the same tests CI runs, on real Linux.
 
 ## Code standards
 
@@ -166,7 +174,7 @@ Closes #42
    ```bash
    make check
    ```
-4. **Push and open a PR** using the [PR template](.github/PULL_REQUEST_TEMPLATE.md)
+4. **Push and open a PR** using the [PR template](PULL_REQUEST_TEMPLATE.md)
 5. **Wait for review** — maintainers review within 3 business days
 6. **Address feedback** — update and push again
 
@@ -235,8 +243,8 @@ func BenchmarkHashTableGet(b *testing.B) { ... }
 
 - Behavior changes must update the docs
 - New exported APIs must update godoc comments
-- Major design changes use the [design template](docs/design/TEMPLATE.md) and register the decision in [ADRs.md](docs/design/ADRs.md)
-- New features update [README.md](README.md) and [CHANGELOG.md](CHANGELOG.md)
+- Major design changes use the [design template](../docs/design/TEMPLATE.md) and register the decision in [ADRs.md](../docs/design/ADRs.md)
+- New features update [README.md](../README.md) and [CHANGELOG.md](../CHANGELOG.md)
 
 ## Other
 

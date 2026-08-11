@@ -50,5 +50,5 @@ Describe other approaches you have considered.
 ## Checklist
 
 - [ ] I searched existing issues and confirmed this is not a duplicate request
-- [ ] I read [CONTRIBUTING.md](../../CONTRIBUTING.md) and the [design template](../../docs/design/TEMPLATE.md)
+- [ ] I read [CONTRIBUTING.md](../CONTRIBUTING.md) and the [design template](../../docs/design/TEMPLATE.md)
 - [ ] For significant features, I will submit a design proposal first

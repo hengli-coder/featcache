@@ -76,7 +76,7 @@ T+14d : 公开披露（补丁发布后），附 CVE 编号（如申请）
 |------|------|
 | 共享内存段名称冲突 | `O_EXCL` 创建 + 唯一段名 |
 | 段残留（进程崩溃） | 显式 `Destroy()` 清理；运维脚本兜底 |
-| hash 种子跨进程不一致 | 见 [ADR-6](docs/design/ADRs.md)，修复中 |
+| hash 种子跨进程不一致 | 见 [ADR-6](../docs/design/ADRs.md)，修复中 |
 | UDS 抽象命名空间暴露 | 仅限同用户命名空间；敏感环境可限制 |
 
 ## 依赖安全
@@ -91,4 +91,4 @@ T+14d : 公开披露（补丁发布后），附 CVE 编号（如申请）
 
 - **Critical/High**：尽快独立发布补丁版本
 - **Medium/Low**：随下一个常规版本发布
-- 所有安全修复在 [CHANGELOG.md](CHANGELOG.md) 中标注 `[SECURITY]` 前缀
+- 所有安全修复在 [CHANGELOG.md](../CHANGELOG.md) 中标注 `[SECURITY]` 前缀

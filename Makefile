@@ -4,6 +4,8 @@
 
 GO       ?= go
 GOLANGCI ?= golangci-lint
+DOCKER   ?= docker
+GO_IMAGE ?= golang:1.25
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT   ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 DATE     ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -11,7 +13,7 @@ LDFLAGS   = -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.da
 BIN       = bin/featload
 COVERAGE_THRESHOLD ?= 70
 
-.PHONY: all build test test-race coverage lint vet fmt check bench clean install-tools release help
+.PHONY: all build test test-race test-linux coverage lint vet fmt check bench clean install-tools release help
 
 all: check
 
@@ -27,6 +29,17 @@ test:
 
 ## test-race: run tests with race detector (alias)
 test-race: test
+
+## test-linux: run the full test suite inside a real Linux container
+## On macOS/Windows, `test` above only compiles the non-linux stub segment
+## (segment_other.go) — it never exercises the real /dev/shm mmap path in
+## e2e_linux_test.go / child_reader_linux_test.go. This target runs the
+## same `go test` CI runs, but on real Linux, so those tests actually
+## execute before you push. Requires a working `docker` (Docker Desktop,
+## Colima, OrbStack, etc. all provide one).
+test-linux:
+	$(DOCKER) run --rm -v "$(CURDIR)":/src -w /src $(GO_IMAGE) \
+		go test ./... -count=1 -race
 
 ## coverage: measure coverage and enforce threshold
 coverage:

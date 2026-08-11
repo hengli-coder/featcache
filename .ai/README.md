@@ -14,5 +14,5 @@ This directory defines the **approved skills list** and **mandatory workflow** f
 ## Companion documents
 
 - [AI_CONTRIBUTING.md](../AI_CONTRIBUTING.md) — AI contribution rules (disclosure, validation, responsibility)
-- [CONTRIBUTING.md](../CONTRIBUTING.md) — general contribution guide
+- [CONTRIBUTING.md](../.github/CONTRIBUTING.md) — general contribution guide
 - [CLAUDE.md](../CLAUDE.md) — Claude Code project guidance

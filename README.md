@@ -290,7 +290,7 @@ go tool cover -func=coverage.out
 
 ### Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow, code standards, and commit requirements.
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the contribution workflow, code standards, and commit requirements.
 
 ### Using AI coding assistants?
 
@@ -334,13 +334,13 @@ See [docs/design/roadmap.md](docs/design/roadmap.md).
 
 ## Security
 
-Found a security issue? Read [SECURITY.md](SECURITY.md) and **do not** disclose it publicly (GitHub Issues, discussions, etc.).
+Found a security issue? Read [SECURITY.md](.github/SECURITY.md) and **do not** disclose it publicly (GitHub Issues, discussions, etc.).
 
 ---
 
 ## Code of Conduct
 
-By participating in this project, you agree to the [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+By participating in this project, you agree to the [CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md).
 
 ---
 

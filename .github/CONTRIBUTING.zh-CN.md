@@ -2,7 +2,7 @@
 
 感谢你对 featcache 的兴趣！我们欢迎各种形式的贡献。提交之前请先阅读本指南。
 
-> **使用 AI 编程助手？** 请同时阅读 [AI_CONTRIBUTING.zh-CN.md](AI_CONTRIBUTING.zh-CN.md) — AI 辅助贡献须与人工代码遵循完全相同的工程标准。
+> **使用 AI 编程助手？** 请同时阅读 [AI_CONTRIBUTING.zh-CN.md](../AI_CONTRIBUTING.zh-CN.md) — AI 辅助贡献须与人工代码遵循完全相同的工程标准。
 >
 > 本文件是 [CONTRIBUTING.md](CONTRIBUTING.md)（英文版）的中文翻译。英文版为权威版本。
 
@@ -22,9 +22,9 @@
 
 有多种方式参与：
 
-- **报告 Bug**：使用 [Bug 模板](.github/ISSUE_TEMPLATE/bug_report.md) 提交 issue
-- **功能建议**：使用 [功能模板](.github/ISSUE_TEMPLATE/feature_request.md)
-- **设计提案**：使用 [设计模板](.github/ISSUE_TEMPLATE/design_proposal.md) 和 [docs/design/TEMPLATE.md](docs/design/TEMPLATE.md)
+- **报告 Bug**：使用 [Bug 模板](ISSUE_TEMPLATE/bug_report.md) 提交 issue
+- **功能建议**：使用 [功能模板](ISSUE_TEMPLATE/feature_request.md)
+- **设计提案**：使用 [设计模板](ISSUE_TEMPLATE/design_proposal.md) 和 [docs/design/TEMPLATE.md](../docs/design/TEMPLATE.md)
 - **提交代码**：Fork → 分支 → PR
 - **完善文档**：修正错别字、补充示例、改进说明
 
@@ -54,12 +54,19 @@ make check    # 或逐个执行
 ```bash
 make build      # 编译
 make test       # 测试（含 race）
+make test-linux # 在真实 Linux 容器中测试（见下方说明）
 make coverage   # 覆盖率
 make lint       # golangci-lint
 make vet        # go vet
 make check      # 全部检查
 make bench      # 基准测试
 ```
+
+> **macOS/Windows 用户注意：** `make test` 只会编译非 Linux 的 stub 实现
+> （`segment_other.go`），不会跑到 `e2e_linux_test.go` / `child_reader_linux_test.go`
+> 里真实 `/dev/shm` mmap 的路径。如果改动涉及 `pkg/featcache/` 下共享内存、哈希、
+> loader/reader 协议相关的代码，推送前请跑一下 `make test-linux`（需要本机有可用
+> 的 `docker`）——它会在真正的 Linux 环境里跑和 CI 一样的测试。
 
 ## 代码规范
 
@@ -168,7 +175,7 @@ Closes #42
    ```bash
    make check
    ```
-4. **推送并创建 PR**：使用 [PR 模板](.github/PULL_REQUEST_TEMPLATE.md)
+4. **推送并创建 PR**：使用 [PR 模板](PULL_REQUEST_TEMPLATE.md)
 5. **等待评审**：维护者会在 3 个工作日内评审
 6. **处理反馈**：根据评审意见修改，重新推送
 
@@ -237,8 +244,8 @@ func BenchmarkHashTableGet(b *testing.B) { ... }
 
 - 行为变化必须同步更新文档
 - 新增导出 API 必须更新 godoc 注释
-- 重大设计变更使用 [设计模板](docs/design/TEMPLATE.md) 提交设计，并在 [ADRs.md](docs/design/ADRs.md) 登记决策
-- 新功能更新 [README.md](README.md) 和 [CHANGELOG.md](CHANGELOG.md)
+- 重大设计变更使用 [设计模板](../docs/design/TEMPLATE.md) 提交设计，并在 [ADRs.md](../docs/design/ADRs.md) 登记决策
+- 新功能更新 [README.md](../README.md) 和 [CHANGELOG.md](../CHANGELOG.md)
 
 ## 其他
 

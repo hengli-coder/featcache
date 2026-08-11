@@ -74,7 +74,7 @@ The timeline may be adjusted based on severity and fix complexity.
 |------|------------|
 | Shared memory segment name collision | `O_EXCL` creation + unique segment names |
 | Segment residue after crash | Explicit `Destroy()`; ops scripts as fallback |
-| Cross-process hash seed inconsistency | See [ADR-6](docs/design/ADRs.md), being fixed |
+| Cross-process hash seed inconsistency | See [ADR-6](../docs/design/ADRs.md), being fixed |
 | UDS abstract namespace exposure | Same-user namespace only; restrict in sensitive environments |
 
 ## Dependency Security
@@ -89,4 +89,4 @@ Security fixes are released under the following rules:
 
 - **Critical/High**: released as a standalone patch as soon as possible
 - **Medium/Low**: released with the next regular version
-- All security fixes are marked with the `[SECURITY]` prefix in [CHANGELOG.md](CHANGELOG.md)
+- All security fixes are marked with the `[SECURITY]` prefix in [CHANGELOG.md](../CHANGELOG.md)

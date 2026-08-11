@@ -43,7 +43,7 @@ Contributors should disclose significant AI assistance in the PR description (se
 
 AI-generated code must:
 
-1. **Follow project coding standards** — see [CONTRIBUTING.md](CONTRIBUTING.md) (gofmt, golangci-lint, naming, comments)
+1. **Follow project coding standards** — see [CONTRIBUTING.md](.github/CONTRIBUTING.md) (gofmt, golangci-lint, naming, comments)
 2. **Pass all existing tests** — `go test ./...`
 3. **Include appropriate tests** — new features ship with unit tests
 4. **Not reduce test coverage** — total coverage ≥ 70%

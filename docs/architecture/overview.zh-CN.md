@@ -158,7 +158,7 @@ Reader.Get(key):
 | UDS 越权访问 | 生产环境建议配合文件系统权限；抽象命名空间仅同用户可连 |
 | 写入者崩溃 | 段保留在 `/dev/shm`，重启后可复用（可用 `destroy` 清理） |
 
-更多安全内容见 [SECURITY.zh-CN.md](../../SECURITY.zh-CN.md)。
+更多安全内容见 [SECURITY.zh-CN.md](../../.github/SECURITY.zh-CN.md)。
 
 ## 8. 相关文档
 

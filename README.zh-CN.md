@@ -290,7 +290,7 @@ go tool cover -func=coverage.out
 
 ### 贡献指南
 
-请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解贡献流程、代码规范、提交要求。
+请阅读 [CONTRIBUTING.md](.github/CONTRIBUTING.md) 了解贡献流程、代码规范、提交要求。
 
 ### 使用 AI 编程助手？
 
@@ -334,13 +334,13 @@ go tool cover -func=coverage.out
 
 ## 安全
 
-发现安全问题？请阅读 [SECURITY.zh-CN.md](SECURITY.zh-CN.md)，**不要**在公开渠道（GitHub Issues 等）披露漏洞。
+发现安全问题？请阅读 [SECURITY.zh-CN.md](.github/SECURITY.zh-CN.md)，**不要**在公开渠道（GitHub Issues 等）披露漏洞。
 
 ---
 
 ## 行为准则
 
-参与本项目即表示同意 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
+参与本项目即表示同意 [CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md)。
 
 ---
 

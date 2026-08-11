@@ -89,7 +89,7 @@ vMAJOR.MINOR.PATCH
 
 - Security fixes are prefixed `[SECURITY]` in the CHANGELOG
 - Emergency security fixes may skip the regular release cadence (quick patch release)
-- See [SECURITY.md](../SECURITY.md)
+- See [SECURITY.md](SECURITY.md)
 
 ## 6. Related configuration
 
@@ -99,4 +99,4 @@ vMAJOR.MINOR.PATCH
 | [.github/workflows/release.yml](workflows/release.yml) | release process |
 | [.github/workflows/quality-metrics.yml](workflows/quality-metrics.yml) | weekly quality report |
 | [.github/dependabot.yml](dependabot.yml) | dependency updates |
-| [.goreleaser.yml](../../.goreleaser.yml) | release build configuration |
+| [.goreleaser.yml](../.goreleaser.yml) | release build configuration |

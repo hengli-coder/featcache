@@ -157,7 +157,7 @@ The performance bottleneck is only on the write path (one-time); the read path i
 | Unauthorized UDS access | Filesystem permissions in production; abstract namespace is same-user only |
 | Writer crash | Segment stays in `/dev/shm`, reusable after restart (clean up with `Destroy`) |
 
-See [SECURITY.md](../../SECURITY.md) for more.
+See [SECURITY.md](../../.github/SECURITY.md) for more.
 
 ## 8. Related documents
 
