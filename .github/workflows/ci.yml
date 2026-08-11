@@ -36,7 +36,7 @@ jobs:
 
       # ── Upload SARIF to GitHub Code Scanning ─────────────────────
       - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: golangci-lint.sarif
           category: golangci-lint
@@ -201,11 +201,11 @@ jobs:
 
       # ── CodeQL static analysis ───────────────────────────────────
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: go
           queries: security-and-quality
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
