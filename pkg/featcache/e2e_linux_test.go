@@ -142,7 +142,7 @@ func TestE2ESegmentLayoutConsistency(t *testing.T) {
 		t.Fatalf("hash table overlaps data region")
 	}
 	// First data bytes are initialized (zeroed hash table, empty data).
-	if uint32(hdr.DataEnd) != hdr.DataOffset {
+	if hdr.DataEnd != hdr.DataOffset {
 		t.Fatalf("DataEnd = %d, want %d", hdr.DataEnd, hdr.DataOffset)
 	}
 }

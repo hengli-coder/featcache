@@ -29,9 +29,8 @@ func buildHelperCommand(args []string) *exec.Cmd {
 // childRunner parses the -ftc.segment and -ftc.request flags registered only
 // in the helper test binary.
 var (
-	ftcSegment   = flag.String("ftc.segment", "", "shared memory segment name (child reader)")
-	ftcRequest   = flag.String("ftc.request", "", "path to request file (child reader)")
-	childDefined bool
+	ftcSegment = flag.String("ftc.segment", "", "shared memory segment name (child reader)")
+	ftcRequest = flag.String("ftc.request", "", "path to request file (child reader)")
 )
 
 // TestE2EChildReader is a helper process. It is spawned by forkReaderVerifier
