@@ -18,7 +18,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -o /out/featload ./cmd/featload
 
 # Runtime stage
-FROM alpine:3.20
+FROM alpine:3.24
 
 RUN apk add --no-cache ca-certificates \
     && addgroup -S featcache && adduser -S -G featcache featcache
