@@ -19,6 +19,8 @@ import (
 	"net"
 	"os"
 	"sync/atomic"
+
+	"github.com/hengli-coder/featcache/pkg/shm"
 )
 
 // ServerState enumerates the loader lifecycle states, surfaced via GET_STATUS.
@@ -39,7 +41,7 @@ type CacheServer struct {
 	segmentSize int
 	udsAddr     string
 
-	seg *Segment
+	seg *shm.Segment
 
 	ln     net.Listener
 	closed atomic.Bool
@@ -51,9 +53,9 @@ type CacheServer struct {
 // NewCacheServer creates a CacheServer that manages a shared memory segment
 // and serves control-plane requests over UDS.
 func NewCacheServer(segmentName string, segmentSize int, udsAddr string) (*CacheServer, error) {
-	seg, err := CreateSegment(segmentName, segmentSize)
+	seg, err := shm.CreateSegment(segmentName, segmentSize)
 	if err != nil {
-		seg, err = OpenSegment(segmentName)
+		seg, err = shm.OpenSegment(segmentName)
 		if err != nil {
 			return nil, err
 		}
@@ -71,11 +73,11 @@ func NewCacheServer(segmentName string, segmentSize int, udsAddr string) (*Cache
 // NewServer creates a CacheServer over an already-open segment.
 // Used by tests and by the loader daemon when it owns the segment and wants
 // to expose it over UDS without re-opening it.
-func NewServer(seg *Segment, udsAddr string) *CacheServer {
+func NewServer(seg *shm.Segment, udsAddr string) *CacheServer {
 	// The server shares ownership of the segment (we map the same memory, not
 	// a new mapping), so Destroy must not unlink a backing file the caller may
-	// not have. Mark it as not file-backed so Destroy is a no-op for the file.
-	seg.backedByFile = false
+	// not have. Mark it as borrowed so Destroy is a no-op for the file.
+	seg.Borrow()
 	return &CacheServer{
 		segmentName: seg.Name(),
 		segmentSize: seg.Cap(),
@@ -95,7 +97,7 @@ func (s *CacheServer) State() ServerState {
 }
 
 // Segment returns the underlying shared memory segment.
-func (s *CacheServer) Segment() *Segment {
+func (s *CacheServer) Segment() *shm.Segment {
 	return s.seg
 }
 
@@ -177,7 +179,7 @@ func (s *CacheServer) handleConn(conn *net.UnixConn) {
 }
 
 func (s *CacheServer) handleGetInfo() Response {
-	hdr := s.seg.Header()
+	hdr := headerOf(s.seg)
 	return Response{
 		Status:      RespOK,
 		SegmentName: s.segmentName,

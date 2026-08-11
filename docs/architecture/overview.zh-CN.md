@@ -72,11 +72,12 @@ featcache 将数据**加载一次**，写入共享内存，所有进程通过 `m
 
 | 组件 | 文件 | 职责 |
 |------|------|------|
-| `Segment` | `segment.go` | 共享内存段的创建/打开/关闭/销毁，平台无关接口 |
-| `Segment (linux)` | `segment_linux.go` | Linux mmap 实现（`/dev/shm` + `unix.Mmap`） |
-| `Segment (other)` | `segment_other.go` | 非 Linux 桩（返回 `ErrNotSupported`；内存段 close/destroy 供测试） |
+| `Segment` | `pkg/shm/segment.go` | 共享内存段的创建/打开/关闭/销毁，平台无关接口（不了解 featcache 的磁盘格式） |
+| `Segment (linux)` | `pkg/shm/segment_linux.go` | Linux mmap 实现（`/dev/shm` + `unix.Mmap`） |
+| `Segment (other)` | `pkg/shm/segment_other.go` | 非 Linux 桩（返回 `ErrNotSupported`；内存段 close/destroy 供测试） |
+| `headerOf` | `header.go` | 把 featcache 的 `Header` 叠加到 `shm.Segment` 的原始字节上 |
 | `HashTable` | `hashtable.go` | 开放寻址 + 线性探测哈希表，CAS 写入，原子读 |
-| `HashKey` | `hash.go` | `hash/maphash` 64-bit 哈希 |
+| `HashKey` | `hash.go` | 带种子的 FNV-1a 64-bit 哈希（见 [ADR-6](../design/ADRs.md#adr-6-why-hashmaphash-for-hashing)） |
 | `Loader` | `loader.go` | 唯一写入者：读数据源、写段、构建索引 |
 | `Reader` | `reader.go` | 零拷贝读取者：直接查共享内存哈希表 |
 | `CacheServer` | `server.go` | UDS 控制面服务器（`OpGetInfo` / `OpGetStatus`） |

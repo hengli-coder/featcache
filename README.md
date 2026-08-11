@@ -230,12 +230,14 @@ featcache/
 ├── cmd/
 │   └── featload/           # Loader daemon entry point
 ├── pkg/
-│   └── featcache/          # Core library
+│   ├── shm/                # Generic POSIX shared memory primitive
+│   │   ├── segment.go      # Segment API (platform-independent)
+│   │   ├── segment_linux.go# Linux mmap implementation
+│   │   └── segment_other.go# Non-Linux stubs + in-memory test segments
+│   └── featcache/          # Core library, built on pkg/shm
 │       ├── types.go        # Header, HashSlot, constants, OpCodes
-│       ├── hash.go         # HashKey (hash/maphash)
-│       ├── segment.go      # Segment API (platform-independent)
-│       ├── segment_linux.go# Linux mmap implementation
-│       ├── segment_other.go# Non-Linux stubs
+│       ├── header.go       # headerOf: overlays Header onto a shm.Segment
+│       ├── hash.go         # HashKey (seeded FNV-1a)
 │       ├── hashtable.go    # Open-addressed hash table
 │       ├── loader.go       # Loader (write side)
 │       ├── reader.go       # Reader (zero-copy read side)
@@ -247,6 +249,8 @@ featcache/
 │   └── featload-demo/      # End-to-end demo
 └── docs/                   # Architecture + design docs
 ```
+
+`pkg/shm` has no dependency on `pkg/featcache` and knows nothing about the on-disk header/hash-table format — it only creates/opens/maps a named segment and hands back raw bytes. It's kept as a separate package (rather than folded into `pkg/featcache`) specifically so it can be split into its own module later without churn, if a second consumer ever needs bare shared-memory segments without featcache's caching protocol on top.
 
 ---
 

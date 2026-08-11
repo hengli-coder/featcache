@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package featcache
+package shm
 
 import (
 	"errors"
@@ -23,12 +23,13 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func devShmPath(name string) string {
+// DevShmPath returns the /dev/shm backing file path for a segment name.
+func DevShmPath(name string) string {
 	return "/dev/shm/" + name
 }
 
 func createSegment(name string, size int) (*Segment, error) {
-	path := devShmPath(name)
+	path := DevShmPath(name)
 	fd, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return nil, err
@@ -56,7 +57,7 @@ func createSegment(name string, size int) (*Segment, error) {
 }
 
 func openSegment(name string) (*Segment, error) {
-	path := devShmPath(name)
+	path := DevShmPath(name)
 	fd, err := os.OpenFile(path, os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, err
@@ -106,7 +107,7 @@ func (s *Segment) destroy() error {
 		// In-memory test segments have no backing file to unlink.
 		return err
 	}
-	rmErr := os.Remove(devShmPath(s.name))
+	rmErr := os.Remove(DevShmPath(s.name))
 	if os.IsNotExist(rmErr) {
 		// The backing file may already be gone (e.g. created with O_EXCL and
 		// removed); treat absence as a successful destroy.

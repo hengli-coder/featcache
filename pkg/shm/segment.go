@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package featcache
+// Package shm provides a minimal, platform-abstracted POSIX shared memory
+// segment primitive: create or open a named segment, map it into the
+// process address space, and hand back the raw bytes.
+//
+// It is deliberately generic — it has no knowledge of what's stored inside
+// the segment. Higher-level packages (e.g. featcache's on-disk header and
+// hash-table format) build on top of the raw []byte returned by Data.
+package shm
 
-import (
-	"errors"
-	"unsafe"
-)
+import "errors"
 
 // ErrNotSupported is returned on non-Linux platforms.
 var ErrNotSupported = errors.New("shared memory is not supported on this platform")
@@ -30,12 +34,12 @@ type Segment struct {
 	cap  int
 
 	// mapped reports whether data was obtained from unix.Mmap (Linux) and
-	// must be unmapped on close. In-memory test segments skip munmap.
+	// must be unmapped on close. In-memory segments skip munmap.
 	mapped bool
 
 	// backedByFile reports whether this segment owns a backing file that must
-	// be unlinked on destroy. Linux segments (Create/Open) are true; in-memory
-	// test segments are false.
+	// be unlinked on destroy. Linux segments (Create/Open) are true by
+	// default; in-memory segments and borrowed segments (see Borrow) are not.
 	backedByFile bool
 }
 
@@ -71,27 +75,18 @@ func (s *Segment) Cap() int { return s.cap }
 // Name returns the segment name.
 func (s *Segment) Name() string { return s.name }
 
-// Header returns a pointer to the segment header at offset 0.
-func (s *Segment) Header() *Header {
-	return (*Header)(unsafe.Pointer(&s.data[0]))
+// Borrow marks the segment as not owning its backing file, so a later
+// Destroy unmaps the memory but skips unlinking. Use this when a caller
+// shares an already-open segment (e.g. a control-plane server sharing the
+// loader's segment) without taking ownership of its on-disk lifecycle.
+func (s *Segment) Borrow() {
+	s.backedByFile = false
 }
 
-// HashOffset returns the byte offset where the hash table starts.
-func (s *Segment) HashOffset() int {
-	return int(s.Header().HashOffset)
-}
-
-// DataOffset returns the byte offset where the data region starts.
-func (s *Segment) DataOffset() int {
-	return int(s.Header().DataOffset)
-}
-
-// HashCap returns the hash table capacity (number of slots).
-func (s *Segment) HashCap() int {
-	return int(s.Header().HashCap)
-}
-
-// GenCounter returns the current generation counter.
-func (s *Segment) GenCounter() uint64 {
-	return s.Header().GenCounter
+// NewInMemorySegment creates a Segment backed by a plain Go byte slice
+// instead of real shared memory. It is intended for tests that exercise
+// the logic built on top of Segment without needing actual cross-process
+// mmap semantics.
+func NewInMemorySegment(name string, size int) *Segment {
+	return &Segment{name: name, data: make([]byte, size), cap: size}
 }

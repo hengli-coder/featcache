@@ -6,6 +6,8 @@ import (
 	"net"
 	"os"
 	"testing"
+
+	"github.com/hengli-coder/featcache/pkg/shm"
 )
 
 // --- CacheServer tests (filesystem UDS path; runs on any OS) ---
@@ -19,14 +21,10 @@ func startTestServer(t *testing.T, name, testID string) (srv *CacheServer, clean
 	addr := "/tmp/ftc-" + testID
 	os.Remove(addr)
 
-	seg := &Segment{
-		name: name,
-		data: make([]byte, 64*1024+1024*1024),
-		cap:  64*1024 + 1024*1024,
-	}
+	seg := shm.NewInMemorySegment(name, 64*1024+1024*1024)
 	s := &CacheServer{
 		segmentName: name,
-		segmentSize: seg.cap,
+		segmentSize: seg.Cap(),
 		udsAddr:     addr,
 		seg:         seg,
 	}
@@ -84,9 +82,8 @@ func TestCacheServerGetInfo(t *testing.T) {
 	defer cleanup()
 
 	// Initialize the segment header so GetInfo returns meaningful metadata.
-	_ = s.seg.Header() // Initialize the underlying segment.
-	hdr := s.seg.Header()
-	hdr.Size = uint64(s.seg.cap)
+	hdr := headerOf(s.seg)
+	hdr.Size = uint64(s.seg.Cap())
 	hdr.HashOffset = HeaderSize
 	hdr.HashCap = 64
 	hdr.DataOffset = Align(HeaderSize+64*SlotSize, 8)
@@ -132,7 +129,7 @@ func TestCacheServerCloseAndDestroy(t *testing.T) {
 		segmentName: "close-test",
 		segmentSize: 64*1024 + 1024*1024,
 		udsAddr:     "", // no UDS path → Close skips unlink
-		seg:         &Segment{name: "close-test", data: make([]byte, 64*1024+1024*1024), cap: 64*1024 + 1024*1024},
+		seg:         shm.NewInMemorySegment("close-test", 64*1024+1024*1024),
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -143,7 +140,7 @@ func TestCacheServerCloseAndDestroy(t *testing.T) {
 		segmentName: "destroy-test",
 		segmentSize: 64*1024 + 1024*1024,
 		udsAddr:     "",
-		seg:         &Segment{name: "destroy-test", data: make([]byte, 64*1024+1024*1024), cap: 64*1024 + 1024*1024},
+		seg:         shm.NewInMemorySegment("destroy-test", 64*1024+1024*1024),
 	}
 	if err := s2.Destroy(); err != nil {
 		t.Fatalf("Destroy: %v", err)
@@ -177,26 +174,29 @@ func TestCacheServerConcurrentClients(t *testing.T) {
 
 // --- Segment header helpers ---
 
+// TestSegmentHeaderAccessors verifies headerOf overlays the featcache Header
+// onto the raw bytes shm.Segment.Data() returns, and that shm.Segment's own
+// generic accessors (Cap, Name) are unaffected by that overlay.
 func TestSegmentHeaderAccessors(t *testing.T) {
 	seg := newTestSegment(t, 0)
-	hdr := seg.Header()
+	hdr := headerOf(seg)
 	hdr.Magic = Magic
 	hdr.HashOffset = 64
 	hdr.DataOffset = 4096
 	hdr.HashCap = 256
 	hdr.GenCounter = 7
 
-	if seg.HashOffset() != 64 {
-		t.Fatalf("HashOffset() = %d", seg.HashOffset())
+	if got := headerOf(seg).HashOffset; got != 64 {
+		t.Fatalf("HashOffset = %d", got)
 	}
-	if seg.DataOffset() != 4096 {
-		t.Fatalf("DataOffset() = %d", seg.DataOffset())
+	if got := headerOf(seg).DataOffset; got != 4096 {
+		t.Fatalf("DataOffset = %d", got)
 	}
-	if seg.HashCap() != 256 {
-		t.Fatalf("HashCap() = %d", seg.HashCap())
+	if got := headerOf(seg).HashCap; got != 256 {
+		t.Fatalf("HashCap = %d", got)
 	}
-	if seg.GenCounter() != 7 {
-		t.Fatalf("GenCounter() = %d", seg.GenCounter())
+	if got := headerOf(seg).GenCounter; got != 7 {
+		t.Fatalf("GenCounter = %d", got)
 	}
 	if seg.Cap() <= 0 {
 		t.Fatal("Cap() must be positive")

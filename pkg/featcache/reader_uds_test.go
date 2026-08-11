@@ -7,6 +7,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/hengli-coder/featcache/pkg/shm"
 )
 
 // TestReaderViaUDS_Discovery verifies that a Reader can connect to a loader's
@@ -20,15 +22,11 @@ func TestReaderViaUDS_Discovery(t *testing.T) {
 	os.Remove(addr)
 
 	name := "discovered-seg"
-	seg := &Segment{
-		name: name,
-		data: make([]byte, 64*1024+1024*1024),
-		cap:  64*1024 + 1024*1024,
-	}
+	seg := shm.NewInMemorySegment(name, 64*1024+1024*1024)
 	// Register the in-memory segment so the Reader can re-open it by name
 	// across the UDS boundary (the non-Linux analogue of /dev/shm lookup).
-	registerTestSegment(name, seg)
-	defer func() { delete(testSegments, name) }()
+	shm.RegisterTestSegment(name, seg)
+	defer shm.UnregisterTestSegment(name)
 
 	// Load data into the segment.
 	loader, err := newLoaderWithSegment(LoaderConfig{SegmentName: name}, seg)
@@ -102,11 +100,7 @@ func TestNewReaderViaUDS_NameMismatch(t *testing.T) {
 	addr := "/tmp/ftc-mismatch-" + time.Now().Format("150405")
 	os.Remove(addr)
 
-	seg := &Segment{
-		name: "real-name",
-		data: make([]byte, 64*1024+1024*1024),
-		cap:  64*1024 + 1024*1024,
-	}
+	seg := shm.NewInMemorySegment("real-name", 64*1024+1024*1024)
 	srv := NewServer(seg, addr)
 	srv.SetState(StateReady)
 	go func() { _ = srv.Listen() }()

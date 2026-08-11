@@ -230,12 +230,14 @@ featcache/
 ├── cmd/
 │   └── featload/           # Loader 守护进程入口
 ├── pkg/
-│   └── featcache/          # 核心库
+│   ├── shm/                # 通用 POSIX 共享内存原语
+│   │   ├── segment.go      # Segment API（平台无关）
+│   │   ├── segment_linux.go# Linux mmap 实现
+│   │   └── segment_other.go# 非 Linux 桩 + 内存测试段
+│   └── featcache/          # 核心库，构建在 pkg/shm 之上
 │       ├── types.go        # Header、HashSlot、常量、OpCode
-│       ├── hash.go         # HashKey (hash/maphash)
-│       ├── segment.go      # Segment API（平台无关）
-│       ├── segment_linux.go# Linux mmap 实现
-│       ├── segment_other.go# 非 Linux 桩
+│       ├── header.go       # headerOf：把 Header 叠加到 shm.Segment 上
+│       ├── hash.go         # HashKey（带种子的 FNV-1a）
 │       ├── hashtable.go    # 开放寻址哈希表
 │       ├── loader.go       # Loader（写入侧）
 │       ├── reader.go       # Reader（零拷贝读取侧）
@@ -247,6 +249,8 @@ featcache/
 │   └── featload-demo/      # 端到端示例
 └── docs/                   # 架构 + 设计文档
 ```
+
+`pkg/shm`不依赖 `pkg/featcache`，也不知道 header/哈希表的具体磁盘格式——它只负责创建/打开/映射一个具名段，返回原始字节。之所以单独成一个 package（而不是直接放进 `pkg/featcache`），就是为了将来真有第二个消费者只需要裸共享内存、不需要 featcache 这套缓存协议时，能零成本拆成独立 module。
 
 ---
 

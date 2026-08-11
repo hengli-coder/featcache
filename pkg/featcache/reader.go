@@ -20,6 +20,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/hengli-coder/featcache/pkg/shm"
 )
 
 // Reader is the read-side component of featcache.
@@ -29,7 +31,7 @@ import (
 //
 // Multiple goroutines can safely call Get concurrently.
 type Reader struct {
-	segment   *Segment
+	segment   *shm.Segment
 	hashTable *HashTable
 
 	// seed is the hash seed recovered from the segment header. Lookups use it
@@ -63,7 +65,7 @@ func NewReader(segmentName string, udsAddr string) (*Reader, error) {
 		}
 	} else {
 		// No UDS — open segment directly (assumes layout is known).
-		seg, err := OpenSegment(segmentName)
+		seg, err := shm.OpenSegment(segmentName)
 		if err != nil {
 			return nil, err
 		}
@@ -85,7 +87,7 @@ func NewReaderViaUDS(udsAddr string) (*Reader, error) {
 
 // NewReaderFromSegment creates a Reader from an already-opened Segment.
 // Useful for testing or when you manage segment lifecycle yourself.
-func NewReaderFromSegment(seg *Segment) (*Reader, error) {
+func NewReaderFromSegment(seg *shm.Segment) (*Reader, error) {
 	r := &Reader{
 		segment: seg,
 	}
@@ -94,7 +96,7 @@ func NewReaderFromSegment(seg *Segment) (*Reader, error) {
 }
 
 func (r *Reader) initHashTable() {
-	hdr := r.segment.Header()
+	hdr := headerOf(r.segment)
 	r.hashTable = NewHashTable(
 		r.segment.Data(),
 		int(hdr.HashOffset),
@@ -146,7 +148,7 @@ func (r *Reader) connect(udsAddr, wantName string) error {
 	}
 
 	// Open the shared memory segment by the discovered name.
-	seg, err := OpenSegment(segName)
+	seg, err := shm.OpenSegment(segName)
 	if err != nil {
 		conn.Close()
 		return err
@@ -179,7 +181,7 @@ func (r *Reader) GetBatch(keys [][]byte) (values [][]byte, results []bool) {
 
 // GenCounter returns the current generation counter from the segment header.
 func (r *Reader) GenCounter() uint64 {
-	return r.segment.GenCounter()
+	return headerOf(r.segment).GenCounter
 }
 
 // Close closes the UDS connection and unmaps the segment.
@@ -199,7 +201,7 @@ func (r *Reader) Close() error {
 }
 
 // Segment returns the underlying segment.
-func (r *Reader) Segment() *Segment {
+func (r *Reader) Segment() *shm.Segment {
 	return r.segment
 }
 

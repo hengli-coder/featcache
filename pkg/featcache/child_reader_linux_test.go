@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+
+	"github.com/hengli-coder/featcache/pkg/shm"
 )
 
 // buildHelperCommand constructs a re-exec of the current test binary that
@@ -61,7 +63,7 @@ func TestE2EChildReader(t *testing.T) {
 	}
 
 	// Open the segment by name (a real cross-process open of /dev/shm/<name>).
-	seg, err := OpenSegment(*ftcSegment)
+	seg, err := shm.OpenSegment(*ftcSegment)
 	if err != nil {
 		t.Fatalf("open segment: %v", err)
 	}

@@ -9,22 +9,20 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/hengli-coder/featcache/pkg/shm"
 )
 
 // --- Segment helpers (in-memory, platform-independent) ---
 
 // newTestSegment builds an in-memory segment with the given size.
 // Exercises the full Loader → Reader path without Linux shared memory.
-func newTestSegment(t *testing.T, size int) *Segment {
+func newTestSegment(t *testing.T, size int) *shm.Segment {
 	t.Helper()
 	if size <= 0 {
 		size = 64*1024 + 1024*1024
 	}
-	return &Segment{
-		name: "test-segment",
-		data: make([]byte, size),
-		cap:  size,
-	}
+	return shm.NewInMemorySegment("test-segment", size)
 }
 
 // --- Loader tests ---
@@ -67,7 +65,7 @@ func TestLoaderInitAndLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	hdr := seg.Header()
+	hdr := headerOf(seg)
 	if hdr.Magic != Magic {
 		t.Fatalf("Magic = %x, want %x", hdr.Magic, Magic)
 	}
@@ -143,8 +141,8 @@ func TestLoaderLoadWithMapSource(t *testing.T) {
 	}
 
 	// GenCounter must be bumped after load.
-	if seg.GenCounter() != 1 {
-		t.Fatalf("GenCounter = %d, want 1", seg.GenCounter())
+	if headerOf(seg).GenCounter != 1 {
+		t.Fatalf("GenCounter = %d, want 1", headerOf(seg).GenCounter)
 	}
 }
 
@@ -454,7 +452,7 @@ func TestReaderGetBatch(t *testing.T) {
 
 func TestReaderCloseIdempotent(t *testing.T) {
 	r := &Reader{
-		segment: &Segment{name: "t", data: make([]byte, 64*1024+1024*1024), cap: 64*1024 + 1024*1024},
+		segment: shm.NewInMemorySegment("t", 64*1024+1024*1024),
 	}
 	r.initHashTable()
 	if err := r.Close(); err != nil {

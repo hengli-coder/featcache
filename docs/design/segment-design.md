@@ -83,6 +83,6 @@ seg := &Segment{name: "test", data: make([]byte, size), cap: size}
 
 ## 7. Related Code
 
-- `pkg/featcache/segment.go` (platform-independent interface)
-- `pkg/featcache/segment_linux.go` (Linux implementation)
-- `pkg/featcache/segment_other.go` (non-Linux stubs)
+- `pkg/shm/segment.go` (platform-independent interface — see [ADR-7](ADRs.md#adr-7-why-pkgshm-is-a-separate-package-not-a-separate-repo))
+- `pkg/shm/segment_linux.go` (Linux implementation)
+- `pkg/shm/segment_other.go` (non-Linux stubs)

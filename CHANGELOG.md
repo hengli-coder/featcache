@@ -52,12 +52,32 @@ Breaking changes must be marked `BREAKING CHANGE:` in the PR and the migration p
 - `CacheServer.Listen` uses the standard octal literal `0o777`; normalized empty-string checks
 - `segment_other.go` non-Linux stub supports in-memory segment close/destroy (test-friendly)
 - Documentation restructured: README is user-oriented; `docs/` covers architecture and design
+- **BREAKING CHANGE**: extracted the generic shared-memory segment primitive
+  out of `pkg/featcache` into its own package, `pkg/shm` (same module, same
+  repo — see [ADR-7](docs/design/ADRs.md#adr-7-why-pkgshm-is-a-separate-package-not-a-separate-repo)).
+  `featcache.Segment`, `featcache.CreateSegment`, `featcache.OpenSegment`,
+  and `featcache.ErrNotSupported` moved to `shm.Segment`, `shm.CreateSegment`,
+  `shm.OpenSegment`, and `shm.ErrNotSupported`. `Loader.Segment()`,
+  `Reader.Segment()`, `CacheServer.Segment()`, `NewServer`, and
+  `NewReaderFromSegment` now take/return `*shm.Segment`. Migration: replace
+  `featcache.Segment`-typed variables with `*shm.Segment` and import
+  `github.com/hengli-coder/featcache/pkg/shm`; the removed
+  `Segment.Header()`/`HashOffset()`/`HashCap()`/`DataOffset()`/`GenCounter()`
+  accessors had no callers outside the package and have no replacement.
 
 ### Fixed
 
 - Fixed nested check in `LineDataSource.Next` (nestingReduce)
 - Fixed byte comparison in `featcache_test.go` (stringXbytes)
 - Fixed all golangci-lint findings (gocritic, godot, gofmt, revive, unconvert)
+- **BREAKING CHANGE**: `HashKey`/`HashKeyWithSeed` no longer use `hash/maphash`.
+  `maphash.Seed` cannot be shared across processes (the runtime mixes in a
+  process-local random key that the `Seed` value doesn't control), so the
+  Loader and a Reader in a different OS process could compute different
+  hashes for the same key and silently fail to find data the Loader wrote.
+  Replaced with a seeded FNV-1a implementation with no process-local state.
+  `HashKeyWithSeed`'s `seed` parameter changed type from `maphash.Seed` to
+  `uint64`. See [ADR-6](docs/design/ADRs.md#adr-6-why-hashmaphash-for-hashing).
 
 ### Security
 

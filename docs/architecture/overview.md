@@ -71,11 +71,12 @@ featcache loads the data **once**, writes it into shared memory, and every proce
 
 | Component | File | Responsibility |
 |-----------|------|----------------|
-| `Segment` | `segment.go` | Platform-independent segment create/open/close/destroy API |
-| `Segment (linux)` | `segment_linux.go` | Linux mmap implementation (`/dev/shm` + `unix.Mmap`) |
-| `Segment (other)` | `segment_other.go` | Non-Linux stubs (return `ErrNotSupported`; in-memory close/destroy for tests) |
+| `Segment` | `pkg/shm/segment.go` | Platform-independent segment create/open/close/destroy API (no knowledge of featcache's on-disk layout) |
+| `Segment (linux)` | `pkg/shm/segment_linux.go` | Linux mmap implementation (`/dev/shm` + `unix.Mmap`) |
+| `Segment (other)` | `pkg/shm/segment_other.go` | Non-Linux stubs (return `ErrNotSupported`; in-memory close/destroy for tests) |
+| `headerOf` | `header.go` | Overlays the featcache `Header` onto a `shm.Segment`'s raw bytes |
 | `HashTable` | `hashtable.go` | Open-addressed + linear-probing hash table; CAS writes, atomic reads |
-| `HashKey` | `hash.go` | `hash/maphash` 64-bit hash |
+| `HashKey` | `hash.go` | Seeded FNV-1a 64-bit hash (see [ADR-6](../design/ADRs.md#adr-6-why-hashmaphash-for-hashing)) |
 | `Loader` | `loader.go` | The single writer: reads a DataSource, writes the segment, builds the index |
 | `Reader` | `reader.go` | Zero-copy reader: queries the shared-memory hash table directly |
 | `CacheServer` | `server.go` | UDS control-plane server (`OpGetInfo` / `OpGetStatus`) |

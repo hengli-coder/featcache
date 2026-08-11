@@ -18,6 +18,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"testing"
+
+	"github.com/hengli-coder/featcache/pkg/shm"
 )
 
 // BenchmarkGet measures single-key lookup latency through a Reader backed by
@@ -111,7 +113,7 @@ func buildBenchLoader(b *testing.B, n int) *Loader {
 	return l
 }
 
-func newBenchSegment(n int) *Segment {
+func newBenchSegment(n int) *shm.Segment {
 	// Loader.Init uses hashCap = NextPow2(2n) slots (rounded to power of 2),
 	// so reserve that exact hash table size. Keys are "key%04d" (6-8 bytes),
 	// values 32 bytes, so each entry is [keyLen:4][key][val:32] ~ 44 bytes.
@@ -120,7 +122,7 @@ func newBenchSegment(n int) *Segment {
 	dataOffset := Align(uint32(64+hashBytes), 8)
 	entryBytes := 4 + 8 + 32
 	sz := int(dataOffset) + n*entryBytes + 8192 /*slack*/
-	return &Segment{name: "bench", data: make([]byte, sz), cap: sz}
+	return shm.NewInMemorySegment("bench", sz)
 }
 
 func makePostKeys(n int) [][]byte {

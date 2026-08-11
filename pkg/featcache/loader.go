@@ -19,6 +19,8 @@ import (
 	"errors"
 	"log"
 	"sync/atomic"
+
+	"github.com/hengli-coder/featcache/pkg/shm"
 )
 
 // LoaderConfig configures the behavior of a Loader.
@@ -47,7 +49,7 @@ func (c *LoaderConfig) defaults() {
 // It creates a shared memory segment, writes data from a DataSource,
 // and builds the hash table index. Only one Loader per segment.
 type Loader struct {
-	segment   *Segment
+	segment   *shm.Segment
 	hashTable *HashTable
 	config    LoaderConfig
 
@@ -61,9 +63,9 @@ type Loader struct {
 func NewLoader(config LoaderConfig) (*Loader, error) {
 	config.defaults()
 
-	seg, err := CreateSegment(config.SegmentName, config.SegmentSize)
+	seg, err := shm.CreateSegment(config.SegmentName, config.SegmentSize)
 	if err != nil {
-		seg, err = OpenSegment(config.SegmentName)
+		seg, err = shm.OpenSegment(config.SegmentName)
 		if err != nil {
 			return nil, err
 		}
@@ -74,7 +76,7 @@ func NewLoader(config LoaderConfig) (*Loader, error) {
 // newLoaderWithSegment creates a Loader over an existing segment.
 // Used internally by NewLoader and by tests to exercise the load path
 // without allocating a real shared memory segment.
-func newLoaderWithSegment(config LoaderConfig, seg *Segment) (*Loader, error) {
+func newLoaderWithSegment(config LoaderConfig, seg *shm.Segment) (*Loader, error) {
 	config.defaults()
 
 	l := &Loader{
@@ -104,7 +106,7 @@ func (l *Loader) Init(expectedEntries int) error {
 	}
 
 	// Write header
-	hdr := l.segment.Header()
+	hdr := headerOf(l.segment)
 	hdr.Magic = Magic
 	hdr.Version = Version
 	hdr.Size = uint64(segSize)
@@ -172,7 +174,7 @@ func (l *Loader) Load(ds DataSource) (int, error) {
 	}
 
 	// Update generation counter
-	l.segment.Header().GenCounter++
+	headerOf(l.segment).GenCounter++
 	log.Printf("featcache: loaded %d entries into segment %q", count, l.config.SegmentName)
 	return count, nil
 }
@@ -202,8 +204,8 @@ func (l *Loader) put(key, value []byte) error {
 
 	// Insert into hash table, hashing with the header-persisted seed so a
 	// reader in another process probes the same slot indices.
-	h := HashKeyWithSeed(key, headerHashSeed(l.segment.Header()))
-	relOffset := uint32(absOff) - l.segment.Header().DataOffset
+	h := HashKeyWithSeed(key, headerHashSeed(headerOf(l.segment)))
+	relOffset := uint32(absOff) - headerOf(l.segment).DataOffset
 	if !l.hashTable.Insert(h, key, relOffset, uint32(len(value))) {
 		return errHashFull
 	}
@@ -222,7 +224,7 @@ func (l *Loader) Destroy() error {
 }
 
 // Segment returns the underlying segment.
-func (l *Loader) Segment() *Segment {
+func (l *Loader) Segment() *shm.Segment {
 	return l.segment
 }
 

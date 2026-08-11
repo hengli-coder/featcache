@@ -14,11 +14,13 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/hengli-coder/featcache/pkg/shm"
 )
 
 func TestE2ERealShmLoadAndRead(t *testing.T) {
 	name := fmt.Sprintf("ftc-e2e-%d", os.Getpid())
-	shmPath := devShmPath(name)
+	shmPath := shm.DevShmPath(name)
 	os.Remove(shmPath) // clean any stale segment from a previous crash
 	defer os.Remove(shmPath)
 
@@ -55,7 +57,7 @@ func TestE2ERealShmLoadAndRead(t *testing.T) {
 
 func TestE2EServerGetInfoOverRealShm(t *testing.T) {
 	name := fmt.Sprintf("ftc-srv-%d", os.Getpid())
-	shmPath := devShmPath(name)
+	shmPath := shm.DevShmPath(name)
 	os.Remove(shmPath)
 	defer os.Remove(shmPath)
 
@@ -121,7 +123,7 @@ func TestE2EServerGetInfoOverRealShm(t *testing.T) {
 
 func TestE2ESegmentLayoutConsistency(t *testing.T) {
 	name := fmt.Sprintf("ftc-layout-%d", os.Getpid())
-	shmPath := devShmPath(name)
+	shmPath := shm.DevShmPath(name)
 	os.Remove(shmPath)
 	defer os.Remove(shmPath)
 
@@ -133,7 +135,7 @@ func TestE2ESegmentLayoutConsistency(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	hdr := loader.Segment().Header()
+	hdr := headerOf(loader.Segment())
 	if int(hdr.DataOffset) >= int(hdr.Size) {
 		t.Fatalf("DataOffset %d exceeds size %d", hdr.DataOffset, hdr.Size)
 	}
