@@ -15,8 +15,8 @@
 package featcache
 
 import (
+	"crypto/rand"
 	"encoding/binary"
-	"math/rand/v2"
 )
 
 // seedSlot is where the 64-bit hash seed is persisted in the header Reserved
@@ -73,10 +73,7 @@ func headerHashSeed(hdr *Header) uint64 {
 // bytes so all processes sharing the segment agree on key hashing. It returns
 // the seed it wrote so callers can hash consistently in the same turn.
 func setHeaderHashSeed(hdr *Header) uint64 {
-	var seed uint64
-	for seed == 0 { // 0 is reserved to mean "no seed persisted yet"
-		seed = rand.Uint64()
-	}
+	seed := randSeed()
 	binary.LittleEndian.PutUint64(hdr.Reserved[seedSlot:seedSlot+8], seed)
 	return seed
 }
@@ -85,15 +82,23 @@ func setHeaderHashSeed(hdr *Header) uint64 {
 // Within a single process it is stable, so a HashKey(insert) and
 // HashKey(get) in the same binary agree. Cross-process consumers must use
 // the header-persisted seed (headerHashSeed) instead.
-var pkgSeed = func() uint64 {
-	var seed uint64
-	for seed == 0 {
-		seed = rand.Uint64()
-	}
-	return seed
-}()
+var pkgSeed = randSeed()
 
 // defaultSeed returns the default process seed.
 func defaultSeed() uint64 {
 	return pkgSeed
+}
+
+// randSeed returns a cryptographically random, non-zero uint64. 0 is
+// reserved to mean "no seed persisted yet" (see headerHashSeed).
+func randSeed() uint64 {
+	var buf [8]byte
+	for {
+		if _, err := rand.Read(buf[:]); err != nil {
+			panic("featcache: crypto/rand unavailable: " + err.Error())
+		}
+		if seed := binary.LittleEndian.Uint64(buf[:]); seed != 0 {
+			return seed
+		}
+	}
 }
