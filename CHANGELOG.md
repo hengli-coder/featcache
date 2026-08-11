@@ -32,13 +32,23 @@ Breaking changes must be marked `BREAKING CHANGE:` in the PR and the migration p
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-11
+
 ### Added
 
-- New `MapDataSource` in-memory data source (`NewMapDataSource`)
+- Core shared memory segment management (create/open/close/destroy)
+- Open-addressed hash table (full 64-bit hash, CAS writes, atomic reads)
+- Loader batch loading (DataSource abstraction)
+- Reader zero-copy reads (Get / GetBatch / GenCounter)
+- UDS control-plane protocol (GET_INFO / GET_STATUS)
+- Data source implementations: FileDataSource, LineDataSource, `NewMapDataSource`
+- `featload` daemon, including a `-source` data source flag
+- Performance benchmarks
+- Apache License 2.0
 - Tests for `Loader`, `CacheServer` UDS protocol, and data sources
 - Example program [examples/featload-demo](examples/featload-demo)
-- Architecture and design documentation (`docs/architecture/`, `docs/design/`)
-- Makefile, coverage threshold script, CI coverage gate
+- Architecture and design documentation (`docs/architecture/`, `docs/design/`), including ADRs and a roadmap
+- Makefile, coverage threshold script, CI coverage gate, Docker-based Linux test target
 - Dependabot configuration and dependency vulnerability scanning
 - GitHub issue/PR templates
 - AI contribution governance (`AI_CONTRIBUTING.md`, `.ai/skill-lock.json`)
@@ -52,6 +62,7 @@ Breaking changes must be marked `BREAKING CHANGE:` in the PR and the migration p
 - `CacheServer.Listen` uses the standard octal literal `0o777`; normalized empty-string checks
 - `segment_other.go` non-Linux stub supports in-memory segment close/destroy (test-friendly)
 - Documentation restructured: README is user-oriented; `docs/` covers architecture and design
+- Repository renamed from `shm-go` to `featcache` to match the Go module path and product name
 - **BREAKING CHANGE**: extracted the generic shared-memory segment primitive
   out of `pkg/featcache` into its own package, `pkg/shm` (same module, same
   repo — see [ADR-7](docs/design/ADRs.md#adr-7-why-pkgshm-is-a-separate-package-not-a-separate-repo)).
@@ -78,23 +89,13 @@ Breaking changes must be marked `BREAKING CHANGE:` in the PR and the migration p
   Replaced with a seeded FNV-1a implementation with no process-local state.
   `HashKeyWithSeed`'s `seed` parameter changed type from `maphash.Seed` to
   `uint64`. See [ADR-6](docs/design/ADRs.md#adr-6-why-hashmaphash-for-hashing).
+- Fixed CI coverage gate scoped to `./...` (dragged down by 0%-covered
+  `cmd`/`examples` packages) instead of `./pkg/featcache/`
+- Fixed `gosec` weak-RNG finding by using `crypto/rand` for the hash seed
 
 ### Security
 
 - Added `SECURITY.md` vulnerability reporting and disclosure process
-
-## [0.1.0] - 2026-07-19 (initial implementation)
-
-### Added
-
-- Core shared memory segment management (create/open/close/destroy)
-- Open-addressed hash table (full 64-bit hash, CAS writes, atomic reads)
-- Loader batch loading (DataSource abstraction)
-- Reader zero-copy reads (Get / GetBatch / GenCounter)
-- UDS control-plane protocol (GET_INFO / GET_STATUS)
-- Data source implementations: FileDataSource, LineDataSource
-- Performance benchmarks
-- Apache License 2.0
 
 ---
 
