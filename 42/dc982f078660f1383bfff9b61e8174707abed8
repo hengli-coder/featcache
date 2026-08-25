@@ -1,0 +1,86 @@
+.gitignore
+  h_c52b696c122999 14
+docs/architecture/control-plane.md
+  s_211d0fa1161c7e::t_95a0dc858c9572 56,59-61
+  s_211d0fa1161c7e::t_47cb1a5e50d484 85
+  s_211d0fa1161c7e::t_33be83f8e42e81 79
+  s_211d0fa1161c7e::t_1aa30e4b7323d5 19
+  s_211d0fa1161c7e::t_160f606ef25977 62
+docs/architecture/overview.zh-CN.md
+  s_211d0fa1161c7e::t_cf192db6126bd5 83
+  s_211d0fa1161c7e::t_7b2ac1de8f5944 117
+docs/architecture/overview.md
+  s_211d0fa1161c7e::t_7696067c103810 82
+  s_211d0fa1161c7e::t_984cc633d7abd1 116
+docs/architecture/control-plane.zh-CN.md
+  s_211d0fa1161c7e::t_45aec64e3b06f2 87
+  s_211d0fa1161c7e::t_3675fa0ef888e5 21
+  s_211d0fa1161c7e::t_3005bb01c5275e 58,61-63
+  s_211d0fa1161c7e::t_444627b56d89a6 81
+  s_211d0fa1161c7e::t_b3e0ff003af9ec 64
+pkg/featcache/protocol.go
+  s_211d0fa1161c7e::t_656da24e1bc899 143-144
+  s_211d0fa1161c7e::t_890ec701f54da8 39
+  s_211d0fa1161c7e::t_7a2b1e37738853 46
+  s_211d0fa1161c7e::t_79239d15000733 67
+  s_211d0fa1161c7e::t_80b52aedfb94b1 182-183
+docs/design/control-plane-design.md
+  s_211d0fa1161c7e::t_0b84504d6afae1 38-39,42
+  s_211d0fa1161c7e::t_2132f960fcc0d8 43
+docs/design/roadmap.md
+  s_211d0fa1161c7e::t_007be52d0dc59e 5
+  s_211d0fa1161c7e::t_80cbd5662a2bad 27
+  s_211d0fa1161c7e::t_93d493cbd5850d 65-66
+  s_211d0fa1161c7e::t_b25ca63bc49316 17,29,35,38-46,69
+  s_211d0fa1161c7e::t_cbe1975b3ea5e4 67
+  s_211d0fa1161c7e::t_ccab6fced0e2a9 28
+pkg/featcache/server.go
+  s_211d0fa1161c7e::t_66d5b2b4a83ee2 26-28
+  s_211d0fa1161c7e::t_dabf5fb246659a 184-193,202,206-211
+CLAUDE.md
+  s_211d0fa1161c7e::t_43a92754457f32 60,64-74
+pkg/featcache/server_test.go
+  s_211d0fa1161c7e::t_644d4591443dc3 105-107
+  s_211d0fa1161c7e::t_6b95e2679d541e 83
+  s_211d0fa1161c7e::t_b6523f2384eea1 125,128-135,138-161
+  s_211d0fa1161c7e::t_890ec701f54da8 136-137
+  s_211d0fa1161c7e::t_bdd354830d7935 110-121
+  s_211d0fa1161c7e::t_d0a560314d83a2 108-109
+docs/design/hot-swap-design.md
+  s_211d0fa1161c7e::t_eb87b64010b8c7 89-100
+  s_211d0fa1161c7e::t_de83242cc9a791 3
+docs/design/loader-reader-design.md
+  s_211d0fa1161c7e::t_29bb492f758043 97
+  s_211d0fa1161c7e::t_24d3e784ea5756 77-80
+pkg/featcache/types.go
+  s_211d0fa1161c7e::t_e7de5108192892 106
+CHANGELOG.md
+  s_211d0fa1161c7e::t_aa23137e73305c 35-37
+  s_211d0fa1161c7e::t_5d11dd7d339c9d 38,41
+pkg/featcache/featcache_test.go
+  s_211d0fa1161c7e::t_77928319281305 241
+  s_211d0fa1161c7e::t_e6a5435cf2905a 273-275
+pkg/featcache/reader.go
+  s_211d0fa1161c7e::t_0d14419b405249 133-135
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "42dc982f078660f1383bfff9b61e8174707abed8",
+  "prompts": {},
+  "humans": {
+    "h_c52b696c122999": {
+      "author": "hengli-coder <28528639+hengli-coder@users.noreply.github.com>"
+    }
+  },
+  "sessions": {
+    "s_211d0fa1161c7e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c1d0d336-87dc-4031-863f-2de0f0e2cc48",
+        "model": "grok-4.6"
+      },
+      "human_author": "hengli-coder <28528639+hengli-coder@users.noreply.github.com>"
+    }
+  }
+}
