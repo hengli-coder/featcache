@@ -34,6 +34,7 @@ docs/design/roadmap.md
   s_211d0fa1161c7e::t_b25ca63bc49316 17,29,35,38-46,69
   s_211d0fa1161c7e::t_cbe1975b3ea5e4 67
   s_211d0fa1161c7e::t_ccab6fced0e2a9 28
+  s_211d0fa1161c7e::t_f2dacd3eea3089 64
 pkg/featcache/server.go
   s_211d0fa1161c7e::t_66d5b2b4a83ee2 26-28
   s_211d0fa1161c7e::t_dabf5fb246659a 184-193,202,206-211
@@ -57,6 +58,7 @@ pkg/featcache/types.go
 CHANGELOG.md
   s_211d0fa1161c7e::t_aa23137e73305c 35-37
   s_211d0fa1161c7e::t_5d11dd7d339c9d 38,41
+  s_211d0fa1161c7e::t_23086dd7ac8386 39-40,42-47
 pkg/featcache/featcache_test.go
   s_211d0fa1161c7e::t_77928319281305 241
   s_211d0fa1161c7e::t_e6a5435cf2905a 273-275
