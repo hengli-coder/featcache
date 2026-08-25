@@ -35,8 +35,11 @@ OpCode: 1B | KeyLen: 2B (BE) | Key: KeyLen B
 
 ```
 Status: 1B | SegmentName: 64B | SegmentSize: 8B (BE)
-| HashOffset: 4B (BE) | HashCap: 4B (BE) | DataOffset: 4B (BE) | GenCounter: 8B (BE)
+| HashOffset: 4B (BE) | HashCap: 4B (BE) | DataOffset: 4B (BE)
+| GenCounter: 8B (BE) | State: 4B (BE; ServerState)
 ```
+
+`OpGetInfo` and `OpGetStatus` share this 97-byte layout. Loading/Updating map to `RespBusy`.
 
 ### 4.4 Server
 

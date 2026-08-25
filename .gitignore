@@ -11,6 +11,7 @@ shmd-*
 *.test
 *.out
 coverage.out
+/featload
 coverage.html
 coverage
 

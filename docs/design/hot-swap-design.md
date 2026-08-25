@@ -1,6 +1,6 @@
 # Hot-Swap Design (Phase 2)
 
-> Status: Proposed · Target version: v2.0.0
+> Status: Proposed · Target version: v1.0.0 (see [roadmap](roadmap.md))
 
 ## 1. Problem
 
@@ -86,7 +86,18 @@ type Reader struct {
 - Integration: Loader publishes v2 → Reader switches → new data readable
 - Stress: concurrent queries during the switch must not crash
 
-## 8. Future Improvements
+## 8. Implementation sequence
+
+Do these in order; each step should be independently testable:
+
+1. **Long-lived control-plane connection** — `handleConn` currently reads one request and closes. Watch needs a persistent connection (or a dedicated watch socket).
+2. **`OpWatch`** — client stays connected; server pushes a response when `GenCounter` changes (or on subscribe, send the current generation first).
+3. **Loader double-buffer** — create segment v2, `Load` into it, then publish. Keep serving v1 until watchers have switched.
+4. **Reader atomic switch** — `atomic.Pointer[*shm.Segment]`; in-flight `Get` uses the pointer it loaded at start of the call.
+5. **Reclamation** — refcount in-flight readers + a timer fallback so a stuck watcher cannot pin v1 forever.
+6. **Full rebuild first** — skip incremental diffs until the switch path is production-proven.
+
+## 9. Future Improvements
 
 - Diff updates (copy only changed data incrementally)
 - Multi-version retention (gray rollback)

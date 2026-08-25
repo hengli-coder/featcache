@@ -36,13 +36,14 @@ import (
 //	HashCap:     4B (uint32, big-endian)
 //	DataOffset:  4B (uint32, big-endian)
 //	GenCounter:  8B (uint64, big-endian)
+//	State:       4B (uint32, big-endian; ServerState)
 
 const (
 	// ReqHeaderLen is the request header size.
 	ReqHeaderLen = 3
 
 	// RespHeaderLen is the response header size.
-	RespHeaderLen = 1 + 64 + 8 + 4 + 4 + 4 + 8 // 93 bytes
+	RespHeaderLen = 1 + 64 + 8 + 4 + 4 + 4 + 8 + 4 // 97 bytes
 
 	// MaxMsgLen is the maximum total message size.
 	MaxMsgLen = 1 << 20 // 1 MB
@@ -63,6 +64,7 @@ type Response struct {
 	HashCap     uint32
 	DataOffset  uint32
 	GenCounter  uint64
+	State       uint32 // ServerState: Idle / Loading / Ready / Updating
 }
 
 // EncodeRequest writes a request to w.
@@ -138,6 +140,8 @@ func EncodeResponse(w io.Writer, resp *Response) error {
 	binary.BigEndian.PutUint32(header[off:off+4], resp.DataOffset)
 	off += 4
 	binary.BigEndian.PutUint64(header[off:off+8], resp.GenCounter)
+	off += 8
+	binary.BigEndian.PutUint32(header[off:off+4], resp.State)
 
 	_, err := w.Write(header)
 	return err
@@ -175,6 +179,8 @@ func DecodeResponse(r io.Reader) (*Response, error) {
 	resp.DataOffset = binary.BigEndian.Uint32(header[off : off+4])
 	off += 4
 	resp.GenCounter = binary.BigEndian.Uint64(header[off : off+8])
+	off += 8
+	resp.State = binary.BigEndian.Uint32(header[off : off+4])
 
 	return resp, nil
 }

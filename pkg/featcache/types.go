@@ -103,7 +103,7 @@ type OpCode byte
 
 const (
 	OpGetInfo   OpCode = 0x01 // Get segment metadata
-	OpGetStatus OpCode = 0x02 // Get loader status
+	OpGetStatus OpCode = 0x02 // Get loader ServerState and segment metadata
 	OpWatch     OpCode = 0x03 // Watch for version changes (Phase 2)
 	OpPin       OpCode = 0x04 // Pin data in memory (Phase 3)
 	OpPrefetch  OpCode = 0x05 // Prefetch data to cache (Phase 3)

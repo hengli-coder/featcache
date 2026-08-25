@@ -2,7 +2,7 @@
 
 featcache's feature evolution roadmap, organized by phase. Each phase delivers a shippable milestone.
 
-## Phase 1: Core (current, v0.x)
+## Phase 1: Core (complete, v0.3.0)
 
 **Goal**: a usable, testable, deployable core caching system.
 
@@ -14,6 +14,7 @@ featcache's feature evolution roadmap, organized by phase. Each phase delivers a
 | Loader (batch loading) | ✅ |
 | Reader (zero-copy reads) | ✅ |
 | UDS control-plane protocol (`OpGetInfo` / `OpGetStatus`) | ✅ |
+| `GET_STATUS` reports `ServerState` (Idle/Loading/Ready/Updating) | ✅ |
 | DataSource abstraction + built-ins (file / line / map) | ✅ |
 | Tests + benchmarks | ✅ |
 
@@ -23,16 +24,26 @@ featcache's feature evolution roadmap, organized by phase. Each phase delivers a
 - [x] `Reader.connect` sends GET_INFO and validates the loader-reported segment name
 - [x] `featload` daemon accepts a `-source` data source flag
 
-## Phase 2: Hot swap
+**Do not freeze the public API as v1.0 yet.** Phase 2 hot swap will change `Reader` (atomic current-segment pointer, long-lived `OpWatch` connections). **v0.3.0** is the Phase 1 close-out tag.
+
+## Phase 2: Hot swap (next)
 
 **Goal**: replace data at runtime without interrupting service.
 
 | Feature | Status |
 |---------|--------|
+| Long-lived UDS + `OpWatch` protocol | next |
 | Double-buffered version switching | planned |
-| `OpWatch` protocol | planned |
-| Incremental updates + diff detection | planned |
 | Old-segment reference counting and reclamation | planned |
+| Incremental updates + diff detection | later (full rebuild first) |
+
+Suggested implementation order (see [hot-swap-design.md](hot-swap-design.md)):
+
+1. Keep the control-plane connection open and implement `OpWatch` (notify on `GenCounter` change)
+2. Loader writes a new segment, then publishes the version
+3. Reader switches via `atomic.Pointer`; in-flight `Get` calls keep the old mapping
+4. Reclaim the old segment after readers drain (refcount + timeout fallback)
+5. Ship full-rebuild hot swap before attempting incremental diffs
 
 ## Phase 3: Enhancements
 
@@ -50,12 +61,12 @@ featcache's feature evolution roadmap, organized by phase. Each phase delivers a
 
 | Version | Contents | Notes |
 |---------|----------|-------|
-| v0.1.0 | First usable Phase 1 release | Initial release |
-| v0.2.0 | Cross-process hash consistency fix + complete Reader initialization | Behavior change |
-| v0.3.0 | Full featload CLI (`-source` etc.) | Feature completion |
-| v1.0.0 | Phase 1 stable, API frozen | First stable release |
+| v0.1.0 | First usable Phase 1 release | Tagged 2026-07-19; changelog dated 2026-08-11 |
+| v0.2.0 | Cross-process hash consistency fix + complete Reader initialization | Folded into v0.3.0; not tagged separately |
+| v0.3.0 | Full featload CLI (`-source`), `pkg/shm` split, `GET_STATUS` state | Tagged 2026-08-25; includes breaking API + wire-format changes |
+| v1.0.0 | Phase 1 + Phase 2 hot-swap API freeze | Freeze after `Reader` / `OpWatch` shape is stable |
 | v1.x | Backward compatible | — |
-| v2.0.0 | Phase 2 hot swap | May introduce API changes |
+| v2.0.0 | Reserved for later incompatible changes | Was previously "Phase 2"; Phase 2 now targets v1.0 |
 
 ## Contributing
 

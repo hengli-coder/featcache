@@ -74,9 +74,10 @@ reader.Close()
 ```
 NewReader(name, udsAddr)
   ├─ 1. Connect to UDS (5s timeout)
-  ├─ 2. GET_INFO → segment metadata (TODO: current implementation opens the segment directly)
-  ├─ 3. OpenSegment + mmap
-  └─ 4. Build the HashTable handle
+  ├─ 2. GET_INFO → segment metadata (name, size, layout, GenCounter, ServerState)
+  ├─ 3. Validate caller-provided name against the loader-reported name, if any
+  ├─ 4. OpenSegment + mmap
+  └─ 5. Build the HashTable handle
 ```
 
 ## 5. Alternatives Considered
@@ -93,7 +94,7 @@ NewReader(name, udsAddr)
 | Reader returns a shared-memory slice that gets modified | documented prohibition; callers must copy |
 | DataSource fails mid-way | returns loaded count + error; retryable |
 | Insufficient segment capacity | double-checked in Init/put with clear errors |
-| Cross-process hash inconsistency | see [ADR-6](ADRs.md#adr-6-why-hashmaphash-for-hashing), to be fixed |
+| Cross-process hash inconsistency | seed persisted in Header; FNV-1a (see [ADR-6](ADRs.md#adr-6-why-hashmaphash-for-hashing), superseded) |
 
 ## 7. Related Code
 

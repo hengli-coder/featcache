@@ -80,6 +80,7 @@ func dialAndRequest(t *testing.T, addr string, req *Request) *Response {
 func TestCacheServerGetInfo(t *testing.T) {
 	s, cleanup := startTestServer(t, "test-seg", "gi")
 	defer cleanup()
+	s.SetState(StateReady)
 
 	// Initialize the segment header so GetInfo returns meaningful metadata.
 	hdr := headerOf(s.seg)
@@ -101,15 +102,63 @@ func TestCacheServerGetInfo(t *testing.T) {
 	if resp.DataOffset < HeaderSize+64*SlotSize {
 		t.Fatalf("DataOffset %d too small", resp.DataOffset)
 	}
+	if ServerState(resp.State) != StateReady {
+		t.Fatalf("State = %d, want StateReady", resp.State)
+	}
+}
+
+func TestCacheServerGetInfoBusy(t *testing.T) {
+	s, cleanup := startTestServer(t, "test-seg", "gib")
+	defer cleanup()
+
+	s.SetState(StateLoading)
+	resp := dialAndRequest(t, "/tmp/ftc-gib", &Request{Op: OpGetInfo})
+	if resp.Status != RespBusy {
+		t.Fatalf("status = %d, want RespBusy", resp.Status)
+	}
+	if ServerState(resp.State) != StateLoading {
+		t.Fatalf("State = %d, want StateLoading", resp.State)
+	}
 }
 
 func TestCacheServerGetStatus(t *testing.T) {
-	_, cleanup := startTestServer(t, "test-seg", "gs")
+	s, cleanup := startTestServer(t, "test-seg", "gs")
 	defer cleanup()
 
-	resp := dialAndRequest(t, "/tmp/ftc-gs", &Request{Op: OpGetStatus})
-	if resp.Status != RespOK {
-		t.Fatalf("status = %d, want RespOK", resp.Status)
+	hdr := headerOf(s.seg)
+	hdr.Size = uint64(s.seg.Cap())
+	hdr.HashOffset = HeaderSize
+	hdr.HashCap = 64
+	hdr.DataOffset = Align(HeaderSize+64*SlotSize, 8)
+	hdr.GenCounter = 3
+
+	tests := []struct {
+		name       string
+		state      ServerState
+		wantStatus StatusCode
+	}{
+		{name: "idle", state: StateIdle, wantStatus: RespOK},
+		{name: "loading", state: StateLoading, wantStatus: RespBusy},
+		{name: "ready", state: StateReady, wantStatus: RespOK},
+		{name: "updating", state: StateUpdating, wantStatus: RespBusy},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s.SetState(tt.state)
+			resp := dialAndRequest(t, "/tmp/ftc-gs", &Request{Op: OpGetStatus})
+			if resp.Status != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", resp.Status, tt.wantStatus)
+			}
+			if ServerState(resp.State) != tt.state {
+				t.Fatalf("State = %d, want %d", resp.State, tt.state)
+			}
+			if resp.SegmentName != "test-seg" {
+				t.Fatalf("SegmentName = %q, want %q", resp.SegmentName, "test-seg")
+			}
+			if resp.GenCounter != 3 {
+				t.Fatalf("GenCounter = %d, want 3", resp.GenCounter)
+			}
+		})
 	}
 }
 

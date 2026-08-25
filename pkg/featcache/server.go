@@ -23,7 +23,9 @@ import (
 	"github.com/hengli-coder/featcache/pkg/shm"
 )
 
-// ServerState enumerates the loader lifecycle states, surfaced via GET_STATUS.
+// ServerState enumerates the loader lifecycle states, surfaced via GET_INFO
+// and GET_STATUS as Response.State. Loading and Updating also set Status to
+// RespBusy so callers can fail fast without inspecting State.
 type ServerState int32
 
 const (
@@ -179,20 +181,33 @@ func (s *CacheServer) handleConn(conn *net.UnixConn) {
 }
 
 func (s *CacheServer) handleGetInfo() Response {
+	resp := s.segmentResponse()
+	resp.Status = s.statusForState()
+	return resp
+}
+
+func (s *CacheServer) handleGetStatus() Response {
+	return s.handleGetInfo()
+}
+
+func (s *CacheServer) segmentResponse() Response {
 	hdr := headerOf(s.seg)
 	return Response{
-		Status:      RespOK,
 		SegmentName: s.segmentName,
 		SegmentSize: hdr.Size,
 		HashOffset:  hdr.HashOffset,
 		HashCap:     hdr.HashCap,
 		DataOffset:  hdr.DataOffset,
 		GenCounter:  hdr.GenCounter,
+		State:       uint32(s.State()),
 	}
 }
 
-func (s *CacheServer) handleGetStatus() Response {
-	return Response{
-		Status: RespOK,
+func (s *CacheServer) statusForState() StatusCode {
+	switch s.State() {
+	case StateLoading, StateUpdating:
+		return RespBusy
+	default:
+		return RespOK
 	}
 }

@@ -79,7 +79,7 @@ featcache loads the data **once**, writes it into shared memory, and every proce
 | `HashKey` | `hash.go` | Seeded FNV-1a 64-bit hash (see [ADR-6](../design/ADRs.md#adr-6-why-hashmaphash-for-hashing)) |
 | `Loader` | `loader.go` | The single writer: reads a DataSource, writes the segment, builds the index |
 | `Reader` | `reader.go` | Zero-copy reader: queries the shared-memory hash table directly |
-| `CacheServer` | `server.go` | UDS control-plane server (`OpGetInfo` / `OpGetStatus`) |
+| `CacheServer` | `server.go` | UDS control-plane server (`OpGetInfo` / `OpGetStatus`, including `ServerState`) |
 | `DataSource` | `datasource.go` | DataSource abstraction + built-ins (file / line / map) |
 | Protocol codec | `protocol.go` | UDS binary protocol encode/decode |
 | `featload` | `cmd/featload/` | Loader daemon entry point |
@@ -113,7 +113,7 @@ Inference process starts
   └─ 5. Query: GET(key) searches the shared-memory hash table directly
 ```
 
-> **Note on the current implementation**: `Reader.connect` opens the segment directly; the GET_INFO exchange is a planned TODO (see [roadmap](../design/roadmap.md)).
+> **Initialization**: `Reader.connect` dials the loader, sends GET_INFO, validates the reported segment name, then mmaps the segment. After that the UDS connection is unused until Phase 2 (`OpWatch`).
 
 ### 4.3 Request lifecycle
 
