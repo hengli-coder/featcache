@@ -32,6 +32,19 @@ Breaking changes must be marked `BREAKING CHANGE:` in the PR and the migration p
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-25
+
+Phase 1 close-out. Do not treat this as v1.0: Phase 2 hot swap will change `Reader` and the control-plane connection model.
+
+### Added
+
+- `GET_STATUS` / `GET_INFO` now report loader `ServerState` (`Idle` / `Loading` / `Ready` / `Updating`). Loading and Updating map to `RespBusy`.
+
+### Changed
+
+- **BREAKING CHANGE**: UDS response grew from 93 to 97 bytes — trailing `State` (`uint32`, big-endian) after `GenCounter`. v0.1.0 decoders that `ReadFull` a 93-byte header still work against a v0.3+ server (they ignore the extra 4 bytes on a one-shot connection); v0.3+ clients cannot decode a v0.1.0 93-byte response.
+- Architecture and design docs catch up to the implemented GET_INFO path and FNV-1a hashing; roadmap marks Phase 2 hot swap as next.
+
 ## [0.1.0] - 2026-08-11
 
 ### Added

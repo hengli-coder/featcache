@@ -238,6 +238,7 @@ func TestProtocol_EncodeDecodeResponse(t *testing.T) {
 		HashCap:     1024,
 		DataOffset:  1024 * 1024,
 		GenCounter:  42,
+		State:       uint32(StateReady),
 	}
 
 	// Encode to buffer
@@ -268,6 +269,9 @@ func TestProtocol_EncodeDecodeResponse(t *testing.T) {
 	}
 	if decoded.GenCounter != resp.GenCounter {
 		t.Fatalf("GenCounter = %d, want %d", decoded.GenCounter, resp.GenCounter)
+	}
+	if decoded.State != resp.State {
+		t.Fatalf("State = %d, want %d", decoded.State, resp.State)
 	}
 }
 

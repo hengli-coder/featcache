@@ -18,7 +18,7 @@
 | OpCode | 值 | 说明 |
 |--------|----|------|
 | `OpGetInfo` | `0x01` | 获取内存段元数据（名称、大小、布局） |
-| `OpGetStatus` | `0x02` | 获取加载器状态 |
+| `OpGetStatus` | `0x02` | 获取加载器状态（`ServerState` + 与 GET_INFO 相同的布局元数据） |
 
 ### 二期/三期扩展（预留）
 
@@ -55,7 +55,12 @@ HashOffset:  4B  (uint32, big-endian)
 HashCap:     4B  (uint32, big-endian)
 DataOffset:  4B  (uint32, big-endian)
 GenCounter:  8B  (uint64, big-endian)
+State:       4B  (uint32, big-endian；ServerState)
 ```
+
+总长 97 字节。
+
+`OpGetInfo` 与 `OpGetStatus` 共用此布局。`State` 是 loader 生命周期（`StateIdle` / `StateLoading` / `StateReady` / `StateUpdating`）。Loading 或 Updating 时 `Status` 为 `RespBusy`，否则为 `RespOK`。
 
 ### Status 值
 
@@ -73,13 +78,13 @@ GenCounter:  8B  (uint64, big-endian)
   │
   ├─ 1. 连接 UDS（抽象命名空间，如 "\x00featcache-<name>"）
   ├─ 2. 发送 GET_INFO 请求
-  ├─ 3. 接收响应，获取段元数据（名称、大小、HashOffset、HashCap、DataOffset、GenCounter）
+  ├─ 3. 接收响应，获取段元数据（名称、大小、HashOffset、HashCap、DataOffset、GenCounter、State）
   ├─ 4. mmap 共享内存段
   ├─ 5. 关闭 UDS 连接
   └─ 6. 之后所有查询走共享内存，不再使用 UDS
 ```
 
-> **当前实现说明**：`Reader.connect` 目前直接打开段；发送真实 GET_INFO 请求是规划的 TODO（见 [roadmap](../design/roadmap.md)）。
+> **初始化**：`Reader.connect` 连接 loader、发送 GET_INFO、在调用方提供了段名时校验一致性，然后 mmap 该段。初始化之后直到二期（`OpWatch`）都不再使用这条 UDS 连接。
 
 ## 6. 实现位置
 

@@ -57,19 +57,21 @@ No slab allocator. Data is stored compactly: `[keyLen:4B][keyBytes][valueBytes]`
 - **Readers (inference processes)**: Atomic load slot status, then read data directly — no locks, no syscalls.
 - **Hash table**: Tombstones (`SlotTomb`) preserve probe sequences after deletion.
 
-## Key Components (planned)
+## Key Components
 
 | File | Purpose |
 |------|---------|
-| `types.go` | Constants, Header, HashSlot structures |
-| `hash.go` | `HashKey()` using `hash/maphash` |
-| `segment.go` | Cross-platform `Segment` API wrapper |
-| `segment_linux.go` | Platform-specific mmap/munmap |
-| `hashtable.go` | Open-addressed hash table with atomic CAS |
-| `loader.go` | Batch loader — reads from DataSource, writes to segment |
-| `reader.go` | Zero-copy reader — direct shared memory access |
-| `datasource.go` | DataSource interface (file, database, stream) |
-| `protocol.go` | UDS binary protocol for control plane |
+| `pkg/featcache/types.go` | Constants, Header, HashSlot, OpCodes |
+| `pkg/featcache/hash.go` | `HashKey()` / `HashKeyWithSeed()` — seeded FNV-1a (cross-process) |
+| `pkg/shm/segment.go` | Cross-platform `Segment` API wrapper |
+| `pkg/shm/segment_linux.go` | Linux mmap/munmap |
+| `pkg/shm/segment_other.go` | Non-Linux stubs + in-memory segments for tests |
+| `pkg/featcache/hashtable.go` | Open-addressed hash table with atomic CAS |
+| `pkg/featcache/loader.go` | Batch loader — reads from DataSource, writes to segment |
+| `pkg/featcache/reader.go` | Zero-copy reader — GET_INFO over UDS, then direct shared memory |
+| `pkg/featcache/datasource.go` | DataSource interface (file, line, map) |
+| `pkg/featcache/protocol.go` | UDS binary protocol for control plane |
+| `pkg/featcache/server.go` | CacheServer: `OpGetInfo` / `OpGetStatus` |
 
 ## Development Notes
 

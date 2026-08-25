@@ -16,7 +16,7 @@ The control plane communicates over a Unix Domain Socket. It is used **only** fo
 | OpCode | Value | Description |
 |--------|-------|-------------|
 | `OpGetInfo` | `0x01` | Get segment metadata (name, size, layout) |
-| `OpGetStatus` | `0x02` | Get loader status |
+| `OpGetStatus` | `0x02` | Get loader status (`ServerState` + same layout metadata as GET_INFO) |
 
 ### Reserved for Phase 2/3
 
@@ -53,7 +53,12 @@ HashOffset:  4B  (uint32, big-endian)
 HashCap:     4B  (uint32, big-endian)
 DataOffset:  4B  (uint32, big-endian)
 GenCounter:  8B  (uint64, big-endian)
+State:       4B  (uint32, big-endian; ServerState)
 ```
+
+Total: 97 bytes.
+
+`OpGetInfo` and `OpGetStatus` share this layout. `State` is the loader lifecycle (`StateIdle` / `StateLoading` / `StateReady` / `StateUpdating`). `Status` is `RespBusy` while Loading or Updating, otherwise `RespOK`.
 
 ### Status values
 
@@ -71,13 +76,13 @@ Inference process
   │
   ├─ 1. Connect to UDS (abstract namespace, e.g. "\x00featcache-<name>")
   ├─ 2. Send GET_INFO request
-  ├─ 3. Receive the response with segment metadata (name, size, HashOffset, HashCap, DataOffset, GenCounter)
+  ├─ 3. Receive the response with segment metadata (name, size, HashOffset, HashCap, DataOffset, GenCounter, State)
   ├─ 4. mmap the shared memory segment
   ├─ 5. Close the UDS connection
   └─ 6. All subsequent queries go through shared memory; UDS is no longer used
 ```
 
-> **Note on the current implementation**: `Reader.connect` currently opens the segment directly; sending a real GET_INFO request is a planned TODO (see [roadmap](../design/roadmap.md)).
+> **Initialization**: `Reader.connect` dials the loader, sends GET_INFO, validates the reported segment name when the caller provided one, then mmaps the segment. After init the UDS connection is unused until Phase 2 (`OpWatch`).
 
 ## 6. Implementation locations
 

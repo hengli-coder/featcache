@@ -130,6 +130,9 @@ func (r *Reader) connect(udsAddr, wantName string) error {
 	}
 	if resp.Status != RespOK {
 		conn.Close()
+		if resp.Status == RespBusy {
+			return fmt.Errorf("featcache: loader busy (state %d)", resp.State)
+		}
 		return fmt.Errorf("featcache: loader returned status %d", resp.Status)
 	}
 

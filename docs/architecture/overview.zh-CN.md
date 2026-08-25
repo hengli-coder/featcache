@@ -80,7 +80,7 @@ featcache 将数据**加载一次**，写入共享内存，所有进程通过 `m
 | `HashKey` | `hash.go` | 带种子的 FNV-1a 64-bit 哈希（见 [ADR-6](../design/ADRs.md#adr-6-why-hashmaphash-for-hashing)） |
 | `Loader` | `loader.go` | 唯一写入者：读数据源、写段、构建索引 |
 | `Reader` | `reader.go` | 零拷贝读取者：直接查共享内存哈希表 |
-| `CacheServer` | `server.go` | UDS 控制面服务器（`OpGetInfo` / `OpGetStatus`） |
+| `CacheServer` | `server.go` | UDS 控制面服务器（`OpGetInfo` / `OpGetStatus`，含 `ServerState`） |
 | `DataSource` | `datasource.go` | 数据源抽象 + 内置实现（文件/行/Map） |
 | 协议编解码 | `protocol.go` | UDS 二进制协议编码/解码 |
 | `featload` | `cmd/featload/` | Loader 守护进程入口 |
@@ -114,7 +114,7 @@ Loader 启动
   └─ 5. 查询：GET(key) 直接在共享内存哈希表中查找
 ```
 
-> **当前实现说明**：`Reader.connect` 目前直接打开段；GET_INFO 交换是规划的 TODO（见 [roadmap](../design/roadmap.md)）。
+> **初始化**：`Reader.connect` 连接 loader、发送 GET_INFO、校验返回的段名，然后 mmap 该段。之后直到二期（`OpWatch`）都不再使用这条 UDS 连接。
 
 ### 4.3 请求生命周期
 
